@@ -13,4 +13,10 @@ Write-Host "📚 Building documentation..." -ForegroundColor Cyan
 $env:RUSTDOCFLAGS="-D warnings"
 cargo doc --workspace --all-features --no-deps
 
+Write-Host "🔒 Running security audit..." -ForegroundColor Cyan
+cargo audit --deny unsound --deny yanked
+
+Write-Host "📋 Running cargo deny..." -ForegroundColor Cyan
+cargo deny check
+
 Write-Host "✅ All checks passed!" -ForegroundColor Green

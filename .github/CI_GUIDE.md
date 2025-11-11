@@ -197,11 +197,17 @@ env:
 
 ✅ **Enabled by default** - The `audit` job in [ci.yml](../workflows/ci.yml) checks for security vulnerabilities in dependencies.
 
+**Policy**: CI fails on:
+
+- ❌ Actual vulnerabilities (unsound)
+- ❌ Yanked crates
+- ⚠️ Unmaintained crates (warning only)
+
 To run locally:
 
 ```bash
 cargo install cargo-audit
-cargo audit
+cargo audit --deny unsound --deny yanked
 ```
 
 ### License and Dependency Checks with cargo-deny

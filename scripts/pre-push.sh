@@ -13,4 +13,10 @@ cargo fmt --all -- --check
 echo "📚 Building documentation..."
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
 
+echo "🔒 Running security audit..."
+cargo audit --deny unsound --deny yanked
+
+echo "📋 Running cargo deny..."
+cargo deny check
+
 echo "✅ All checks passed!"
