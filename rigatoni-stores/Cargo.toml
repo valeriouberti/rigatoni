@@ -1,0 +1,68 @@
+[package]
+name = "rigatoni-stores"
+description = "State store implementations for Rigatoni ETL: Memory, File, Redis for distributed state management"
+readme = "README.md"
+
+# Inherit workspace metadata
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Core crate dependency
+rigatoni-core = { path = "../rigatoni-core" }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Concurrency primitives
+parking_lot = { workspace = true }
+dashmap = { workspace = true, optional = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# Redis for distributed state (optional, enabled by redis feature)
+[dependencies.redis]
+workspace = true
+optional = true
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio-test = { workspace = true }
+
+[features]
+# Default enables in-memory and file-based stores
+default = ["memory", "file"]
+
+# Store implementations
+memory = ["dashmap"]
+file = []
+redis-store = ["redis"]
+
+# All stores (useful for testing and development)
+all-stores = ["memory", "file", "redis-store"]
+
+[lib]
+name = "rigatoni_stores"
+path = "src/lib.rs"

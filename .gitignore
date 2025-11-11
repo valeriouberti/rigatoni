@@ -1,0 +1,35 @@
+# Rust build and dependency files
+/target/
+**/*.rs.bk
+
+# Cargo package manager files
+Cargo.lock
+Cargo.toml.orig
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+
+# Logs and temp files
+*.log
+*.tmp
+
+# By-products of tests, benchmarks, etc.
+*.profraw
+
+# Node and JS (if using frontend)
+/node_modules/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Examples, docs, and tools (from your original)
+/examples/
+internal-docs/
+tools/
+HEADER
+.claude/

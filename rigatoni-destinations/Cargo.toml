@@ -1,0 +1,108 @@
+[package]
+name = "rigatoni-destinations"
+description = "Destination implementations for Rigatoni ETL: S3, BigQuery, Kafka, and more"
+readme = "README.md"
+
+# Inherit workspace metadata
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Core crate dependency
+rigatoni-core = { path = "../rigatoni-core" }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# UUID
+uuid = { workspace = true }
+
+# HTTP client for API-based destinations
+reqwest = { workspace = true }
+
+# Serialization formats (optional, enabled by features)
+csv = { workspace = true, optional = true }
+parquet = { workspace = true, optional = true }
+apache-avro = { workspace = true, optional = true }
+
+# Compression (optional, enabled by features)
+flate2 = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
+# AWS S3 (optional, enabled by s3 feature)
+[dependencies.aws-config]
+workspace = true
+optional = true
+
+[dependencies.aws-sdk-s3]
+workspace = true
+optional = true
+
+# Google BigQuery (optional, enabled by bigquery feature)
+[dependencies.gcp-bigquery-client]
+workspace = true
+optional = true
+
+# Kafka (optional, enabled by kafka feature)
+[dependencies.rdkafka]
+workspace = true
+optional = true
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio-test = { workspace = true }
+
+[features]
+# Default enables common destinations
+default = ["s3", "json", "csv"]
+
+# Cloud storage destinations
+s3 = ["aws-config", "aws-sdk-s3"]
+bigquery = ["gcp-bigquery-client"]
+
+# Streaming destinations
+kafka = ["rdkafka", "avro"]
+
+# File format support
+json = []
+csv = ["dep:csv"]
+parquet = ["dep:parquet"]
+avro = ["dep:apache-avro"]
+
+# Compression support
+compression = ["flate2", "zstd"]
+gzip = ["flate2"]
+zstandard = ["zstd"]
+
+# All destinations (useful for testing and development)
+all-destinations = ["s3", "bigquery", "kafka"]
+all-formats = ["json", "csv", "parquet", "avro"]
+all = ["all-destinations", "all-formats", "compression"]
+
+[lib]
+name = "rigatoni_destinations"
+path = "src/lib.rs"

@@ -1,0 +1,74 @@
+[package]
+name = "rigatoni-core"
+description = "Core traits, pipeline orchestration, and MongoDB integration for Rigatoni ETL framework"
+readme = "README.md"
+
+# Inherit workspace metadata
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+bson = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+# MongoDB - core source integration
+mongodb = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# UUID for correlation IDs
+uuid = { workspace = true }
+
+# Concurrency
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+
+# Metrics
+metrics = { workspace = true }
+
+# Schema management
+schemars = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+tokio-test = { workspace = true }
+
+[features]
+default = ["mongodb-source"]
+
+# Feature flags for optional functionality
+mongodb-source = []
+metrics-export = ["metrics-exporter-prometheus"]
+
+# Re-export metrics exporter only when needed
+[dependencies.metrics-exporter-prometheus]
+workspace = true
+optional = true
+
+[lib]
+name = "rigatoni_core"
+path = "src/lib.rs"
