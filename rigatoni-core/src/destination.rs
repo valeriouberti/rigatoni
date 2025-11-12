@@ -191,7 +191,7 @@ pub enum DestinationError {
     ConnectionError {
         /// Human-readable error message
         message: String,
-        /// Whether this error is retryable
+        /// The underlying connection error
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
@@ -339,12 +339,24 @@ impl DestinationError {
     }
 
     /// Creates a capacity error with optional metadata.
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds if `utilization` is provided and not in range [0.0, 1.0].
     #[must_use]
     pub fn capacity(
         message: impl Into<String>,
         utilization: Option<f64>,
         retry_after: Option<std::time::Duration>,
     ) -> Self {
+        // Validate utilization range in debug builds
+        if let Some(u) = utilization {
+            debug_assert!(
+                (0.0..=1.0).contains(&u),
+                "utilization must be in range [0.0, 1.0], got {u}"
+            );
+        }
+
         Self::CapacityError {
             message: message.into(),
             utilization,
@@ -579,6 +591,13 @@ pub trait Destination: Send + Sync {
     /// This method ensures that all previously written data is persisted to the destination.
     /// After `flush()` returns successfully, all prior `write_batch()` calls should be durable.
     ///
+    /// # Ordering Guarantees
+    ///
+    /// - **Write ordering**: Events within a batch maintain their order
+    /// - **Batch ordering**: Batches are persisted in the order `write_batch()` was called
+    /// - **Happens-before**: A successful `flush()` establishes a happens-before relationship
+    ///   with all prior writes, guaranteeing visibility to subsequent reads
+    ///
     /// # When to Call
     ///
     /// Call `flush()`:
@@ -667,7 +686,8 @@ pub trait Destination: Send + Sync {
     /// # Idempotency
     ///
     /// This method should be idempotent - safe to call multiple times.
-    /// Subsequent calls should be no-ops.
+    /// Subsequent calls should be no-ops. Implementers SHOULD ensure multiple calls
+    /// are safe even after resource teardown (e.g., by tracking closed state).
     ///
     /// # Drop vs Close
     ///
@@ -680,7 +700,7 @@ pub trait Destination: Send + Sync {
     /// # Default Implementation
     ///
     /// The default implementation just calls `flush()`. Override this method if you need
-    /// additional cleanup logic.
+    /// additional cleanup logic (connection closure, file handles, etc.).
     ///
     /// # Examples
     ///
