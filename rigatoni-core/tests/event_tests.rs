@@ -46,7 +46,7 @@ fn test_change_event_insert() {
     let event = ChangeEvent {
         operation: OperationType::Insert,
         namespace: Namespace::new("testdb", "users"),
-        document_key: doc! { "_id": 123 },
+        document_key: Some(doc! { "_id": 123 }),
         full_document: Some(doc! {
             "_id": 123,
             "name": "Alice",
@@ -75,7 +75,7 @@ fn test_change_event_update() {
     let event = ChangeEvent {
         operation: OperationType::Update,
         namespace: Namespace::new("testdb", "users"),
-        document_key: doc! { "_id": 123 },
+        document_key: Some(doc! { "_id": 123 }),
         full_document: None,
         update_description: Some(UpdateDescription {
             updated_fields: doc! { "email": "newemail@example.com" },
@@ -105,7 +105,7 @@ fn test_change_event_delete() {
     let event = ChangeEvent {
         operation: OperationType::Delete,
         namespace: Namespace::new("testdb", "users"),
-        document_key: doc! { "_id": 123 },
+        document_key: Some(doc! { "_id": 123 }),
         full_document: None,
         update_description: None,
         cluster_time: Utc::now(),
@@ -123,7 +123,7 @@ fn test_change_event_serialization_roundtrip() {
     let original = ChangeEvent {
         operation: OperationType::Insert,
         namespace: Namespace::new("testdb", "users"),
-        document_key: doc! { "_id": 123 },
+        document_key: Some(doc! { "_id": 123 }),
         full_document: Some(doc! {
             "_id": 123,
             "name": "Bob",
@@ -152,7 +152,7 @@ fn test_change_event_with_truncated_arrays() {
     let event = ChangeEvent {
         operation: OperationType::Update,
         namespace: Namespace::new("testdb", "items"),
-        document_key: doc! { "_id": 456 },
+        document_key: Some(doc! { "_id": 456 }),
         full_document: None,
         update_description: Some(UpdateDescription {
             updated_fields: doc! {},
@@ -179,7 +179,7 @@ fn test_estimated_size_bytes() {
     let event = ChangeEvent {
         operation: OperationType::Insert,
         namespace: Namespace::new("testdb", "users"),
-        document_key: doc! { "_id": 123 },
+        document_key: Some(doc! { "_id": 123 }),
         full_document: Some(doc! {
             "_id": 123,
             "name": "Alice",
@@ -208,7 +208,7 @@ fn test_bson_serialization_roundtrip() {
     let original = ChangeEvent {
         operation: OperationType::Replace,
         namespace: Namespace::new("testdb", "products"),
-        document_key: doc! { "_id": "prod123" },
+        document_key: Some(doc! { "_id": "prod123" }),
         full_document: Some(doc! {
             "_id": "prod123",
             "name": "Widget",
@@ -230,4 +230,67 @@ fn test_bson_serialization_roundtrip() {
     assert_eq!(original.namespace, deserialized.namespace);
     assert!(original.is_replace());
     assert!(deserialized.is_replace());
+}
+
+#[test]
+fn test_change_event_invalidate_without_document_key() {
+    let event = ChangeEvent {
+        operation: OperationType::Invalidate,
+        namespace: Namespace::new("testdb", "users"),
+        document_key: None, // Invalidate events don't have document keys
+        full_document: None,
+        update_description: None,
+        cluster_time: Utc::now(),
+        resume_token: doc! { "_data": "tokenInvalidate" },
+    };
+
+    assert!(event.is_invalidate());
+    assert_eq!(event.document_id(), None);
+    assert_eq!(event.document_key, None);
+
+    // Test serialization roundtrip
+    let json = serde_json::to_string(&event).unwrap();
+    let deserialized: ChangeEvent = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized.document_key, None);
+}
+
+#[test]
+fn test_operation_type_unknown_variant() {
+    let unknown_op = OperationType::Unknown("futureOperation".to_string());
+
+    assert!(unknown_op.is_unknown());
+    assert!(!unknown_op.is_data_modification());
+    assert!(!unknown_op.is_data_removal());
+    assert!(!unknown_op.is_ddl());
+
+    // Test that it can be serialized/deserialized
+    let json = serde_json::to_string(&unknown_op).unwrap();
+    let deserialized: OperationType = serde_json::from_str(&json).unwrap();
+    assert_eq!(deserialized, unknown_op);
+}
+
+#[test]
+fn test_operation_type_all_predicates() {
+    // Test is_data_modification
+    assert!(OperationType::Insert.is_data_modification());
+    assert!(OperationType::Update.is_data_modification());
+    assert!(OperationType::Replace.is_data_modification());
+    assert!(!OperationType::Delete.is_data_modification());
+
+    // Test is_data_removal
+    assert!(OperationType::Delete.is_data_removal());
+    assert!(OperationType::Drop.is_data_removal());
+    assert!(OperationType::DropDatabase.is_data_removal());
+    assert!(!OperationType::Insert.is_data_removal());
+
+    // Test is_ddl
+    assert!(OperationType::Drop.is_ddl());
+    assert!(OperationType::DropDatabase.is_ddl());
+    assert!(OperationType::Rename.is_ddl());
+    assert!(!OperationType::Insert.is_ddl());
+    assert!(!OperationType::Update.is_ddl());
+
+    // Test is_unknown
+    assert!(OperationType::Unknown("test".to_string()).is_unknown());
+    assert!(!OperationType::Insert.is_unknown());
 }

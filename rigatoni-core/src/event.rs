@@ -17,7 +17,7 @@
 //!         database: "mydb".to_string(),
 //!         collection: "users".to_string(),
 //!     },
-//!     document_key: doc! { "_id": 123 },
+//!     document_key: Some(doc! { "_id": 123 }),
 //!     full_document: Some(doc! {
 //!         "_id": 123,
 //!         "name": "Alice",
@@ -41,13 +41,37 @@
 use bson::Document;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// Error that can occur when converting from MongoDB driver's ChangeStreamEvent.
+#[derive(Debug, Clone)]
+pub enum ConversionError {
+    /// Failed to convert resume token to BSON document
+    ResumeTokenConversion(String),
+}
+
+impl fmt::Display for ConversionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConversionError::ResumeTokenConversion(msg) => {
+                write!(f, "Failed to convert resume token: {}", msg)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ConversionError {}
 
 /// MongoDB change stream operation types.
 ///
 /// Represents all possible operations that can occur in a MongoDB change stream.
 /// Each variant corresponds to a specific database operation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// The `Unknown` variant allows forward compatibility with future MongoDB versions
+/// that may introduce new operation types.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[non_exhaustive]
 pub enum OperationType {
     /// A document was inserted into a collection
     Insert,
@@ -68,10 +92,17 @@ pub enum OperationType {
     Drop,
 
     /// A database was dropped
+    #[serde(rename = "dropdatabase")]
     DropDatabase,
 
     /// A collection was renamed
     Rename,
+
+    /// An unknown operation type from a newer MongoDB version
+    ///
+    /// Contains the original operation type string for logging and debugging.
+    #[serde(untagged)]
+    Unknown(String),
 }
 
 impl OperationType {
@@ -100,6 +131,15 @@ impl OperationType {
             self,
             OperationType::Drop | OperationType::DropDatabase | OperationType::Rename
         )
+    }
+
+    /// Returns true if this is an unknown operation type.
+    ///
+    /// Unknown operation types may appear when using a newer MongoDB version
+    /// than this library was designed for.
+    #[inline]
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, OperationType::Unknown(_))
     }
 }
 
@@ -212,8 +252,9 @@ pub struct ChangeEvent {
     /// Document key (_id and shard key if sharded)
     ///
     /// Present for all operations except invalidate.
-    #[serde(rename = "documentKey")]
-    pub document_key: Document,
+    /// For invalidate events, this will be None.
+    #[serde(rename = "documentKey", skip_serializing_if = "Option::is_none")]
+    pub document_key: Option<Document>,
 
     /// Full document after the operation
     ///
@@ -294,8 +335,9 @@ impl ChangeEvent {
     /// Returns the document ID if present in the document key.
     ///
     /// Most MongoDB documents have an `_id` field in the document key.
+    /// Returns None if document_key is not present (e.g., invalidate events).
     pub fn document_id(&self) -> Option<&bson::Bson> {
-        self.document_key.get("_id")
+        self.document_key.as_ref()?.get("_id")
     }
 
     /// Returns true if this event has a full document.
@@ -330,7 +372,9 @@ impl ChangeEvent {
             size += update_desc.removed_fields.iter().map(|s| s.len()).sum::<usize>();
         }
 
-        size += estimate_document_size(&self.document_key);
+        if let Some(doc_key) = &self.document_key {
+            size += estimate_document_size(doc_key);
+        }
         size += estimate_document_size(&self.resume_token);
 
         size
@@ -347,8 +391,13 @@ fn estimate_document_size(doc: &Document) -> usize {
 /// Conversion from MongoDB driver's ChangeStreamEvent.
 ///
 /// This enables seamless integration with the official MongoDB Rust driver.
-impl From<mongodb::change_stream::event::ChangeStreamEvent<Document>> for ChangeEvent {
-    fn from(event: mongodb::change_stream::event::ChangeStreamEvent<Document>) -> Self {
+/// Returns an error if the resume token cannot be converted to a BSON document.
+impl TryFrom<mongodb::change_stream::event::ChangeStreamEvent<Document>> for ChangeEvent {
+    type Error = ConversionError;
+
+    fn try_from(
+        event: mongodb::change_stream::event::ChangeStreamEvent<Document>,
+    ) -> Result<Self, Self::Error> {
         use mongodb::change_stream::event::OperationType as MongoOpType;
 
         // Convert operation type
@@ -362,9 +411,15 @@ impl From<mongodb::change_stream::event::ChangeStreamEvent<Document>> for Change
             MongoOpType::DropDatabase => OperationType::DropDatabase,
             MongoOpType::Rename => OperationType::Rename,
             _ => {
-                // For any unknown operation types, default to invalidate
+                // For any unknown operation types, preserve the original type string
                 // This ensures forward compatibility with new MongoDB versions
-                OperationType::Invalidate
+                let op_str = format!("{:?}", event.operation_type);
+                eprintln!(
+                    "Warning: Unknown MongoDB operation type encountered: {}. \
+                     This may indicate a newer MongoDB version than supported.",
+                    op_str
+                );
+                OperationType::Unknown(op_str)
             }
         };
 
@@ -392,26 +447,47 @@ impl From<mongodb::change_stream::event::ChangeStreamEvent<Document>> for Change
             }),
         });
 
-        // Convert cluster time to chrono DateTime
+        // Convert cluster time to chrono DateTime, preserving increment as nanoseconds
+        // MongoDB Timestamp has both time (seconds) and increment (counter within that second)
+        // We map increment to nanoseconds to preserve ordering of events within the same second
         let cluster_time = event
             .cluster_time
             .map(|ts| {
-                // Convert BSON timestamp to DateTime<Utc>
                 let seconds = ts.time as i64;
-                DateTime::from_timestamp(seconds, 0)
-                    .unwrap_or_else(|| Utc::now())
+                // Map increment to nanoseconds for sub-second precision
+                // This preserves event ordering within the same second
+                let nanos = ts.increment * 1_000_000; // Scale increment to nanosecond range
+                DateTime::from_timestamp(seconds, nanos)
+                    .unwrap_or_else(|| {
+                        // Log error in production - this should never happen with valid MongoDB data
+                        eprintln!(
+                            "Warning: Invalid MongoDB timestamp (time={}, increment={}), using current time",
+                            ts.time, ts.increment
+                        );
+                        Utc::now()
+                    })
             })
-            .unwrap_or_else(|| Utc::now());
+            .unwrap_or_else(|| {
+                eprintln!("Warning: Missing cluster_time in ChangeStreamEvent, using current time");
+                Utc::now()
+            });
 
-        Self {
+        // Convert resume token - this is critical for stream resumption
+        let resume_token = bson::to_document(&event.id).map_err(|e| {
+            ConversionError::ResumeTokenConversion(format!(
+                "Failed to serialize resume token to BSON document: {}",
+                e
+            ))
+        })?;
+
+        Ok(Self {
             operation,
             namespace,
-            document_key: event.document_key.unwrap_or_default(),
+            document_key: event.document_key,
             full_document: event.full_document,
             update_description,
             cluster_time,
-            resume_token: bson::to_document(&event.id)
-                .unwrap_or_else(|_| Document::new()),
-        }
+            resume_token,
+        })
     }
 }
