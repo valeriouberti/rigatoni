@@ -1,6 +1,6 @@
 //! Integration tests for the event module.
 //!
-//! These tests verify the complete functionality of ChangeEvent and related types.
+//! These tests verify the complete functionality of `ChangeEvent` and related types.
 
 use bson::{doc, Bson};
 use chrono::Utc;

@@ -1,11 +1,11 @@
 //! Rigatoni Core - ETL Framework Core Types and Traits
 //!
 //! This crate provides the foundational types and traits for the Rigatoni ETL framework.
-//! It includes event definitions, pipeline orchestration, and MongoDB integration.
+//! It includes event definitions, pipeline orchestration, and `MongoDB` integration.
 //!
 //! # Key Components
 //!
-//! - **Events**: [`event`] module defines MongoDB change stream events
+//! - **Events**: [`event`] module defines `MongoDB` change stream events
 //! - **Pipeline**: Core pipeline orchestration (coming soon)
 //! - **Traits**: Source, Transform, and Destination traits (coming soon)
 //!

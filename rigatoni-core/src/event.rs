@@ -1,7 +1,7 @@
-//! MongoDB Change Stream Event Representation
+//! `MongoDB` Change Stream Event Representation
 //!
 //! This module defines the core event types used throughout the Rigatoni ETL pipeline.
-//! Events represent MongoDB change stream operations and flow from sources to destinations.
+//! Events represent `MongoDB` change stream operations and flow from sources to destinations.
 //!
 //! # Examples
 //!
@@ -43,7 +43,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Error that can occur when converting from MongoDB driver's ChangeStreamEvent.
+/// Error that can occur when converting from `MongoDB` driver's `ChangeStreamEvent`.
 #[derive(Debug, Clone)]
 pub enum ConversionError {
     /// Failed to convert resume token to BSON document
@@ -53,8 +53,8 @@ pub enum ConversionError {
 impl fmt::Display for ConversionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ConversionError::ResumeTokenConversion(msg) => {
-                write!(f, "Failed to convert resume token: {}", msg)
+            Self::ResumeTokenConversion(msg) => {
+                write!(f, "Failed to convert resume token: {msg}")
             }
         }
     }
@@ -62,12 +62,12 @@ impl fmt::Display for ConversionError {
 
 impl std::error::Error for ConversionError {}
 
-/// MongoDB change stream operation types.
+/// `MongoDB` change stream operation types.
 ///
-/// Represents all possible operations that can occur in a MongoDB change stream.
+/// Represents all possible operations that can occur in a `MongoDB` change stream.
 /// Each variant corresponds to a specific database operation.
 ///
-/// The `Unknown` variant allows forward compatibility with future MongoDB versions
+/// The `Unknown` variant allows forward compatibility with future `MongoDB` versions
 /// that may introduce new operation types.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -98,7 +98,7 @@ pub enum OperationType {
     /// A collection was renamed
     Rename,
 
-    /// An unknown operation type from a newer MongoDB version
+    /// An unknown operation type from a newer `MongoDB` version
     ///
     /// Contains the original operation type string for logging and debugging.
     #[serde(untagged)]
@@ -108,42 +108,37 @@ pub enum OperationType {
 impl OperationType {
     /// Returns true if this operation modifies data (insert, update, replace).
     #[inline]
-    pub fn is_data_modification(&self) -> bool {
-        matches!(
-            self,
-            OperationType::Insert | OperationType::Update | OperationType::Replace
-        )
+    #[must_use]
+    pub const fn is_data_modification(&self) -> bool {
+        matches!(self, Self::Insert | Self::Update | Self::Replace)
     }
 
     /// Returns true if this operation removes data (delete, drop, drop database).
     #[inline]
-    pub fn is_data_removal(&self) -> bool {
-        matches!(
-            self,
-            OperationType::Delete | OperationType::Drop | OperationType::DropDatabase
-        )
+    #[must_use]
+    pub const fn is_data_removal(&self) -> bool {
+        matches!(self, Self::Delete | Self::Drop | Self::DropDatabase)
     }
 
     /// Returns true if this operation is a DDL operation (drop, rename, drop database).
     #[inline]
-    pub fn is_ddl(&self) -> bool {
-        matches!(
-            self,
-            OperationType::Drop | OperationType::DropDatabase | OperationType::Rename
-        )
+    #[must_use]
+    pub const fn is_ddl(&self) -> bool {
+        matches!(self, Self::Drop | Self::DropDatabase | Self::Rename)
     }
 
     /// Returns true if this is an unknown operation type.
     ///
-    /// Unknown operation types may appear when using a newer MongoDB version
+    /// Unknown operation types may appear when using a newer `MongoDB` version
     /// than this library was designed for.
     #[inline]
-    pub fn is_unknown(&self) -> bool {
-        matches!(self, OperationType::Unknown(_))
+    #[must_use]
+    pub const fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown(_))
     }
 }
 
-/// MongoDB namespace (database + collection).
+/// `MongoDB` namespace (database + collection).
 ///
 /// Identifies the specific collection where an operation occurred.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -165,6 +160,7 @@ impl Namespace {
     }
 
     /// Returns the fully qualified namespace as "database.collection".
+    #[must_use]
     pub fn full_name(&self) -> String {
         format!("{}.{}", self.database, self.collection)
     }
@@ -189,7 +185,7 @@ pub struct UpdateDescription {
 }
 
 /// Describes modifications to an array field.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TruncatedArray {
     /// Field path to the array
     pub field: String,
@@ -199,10 +195,10 @@ pub struct TruncatedArray {
     pub new_size: u32,
 }
 
-/// A MongoDB change stream event.
+/// A `MongoDB` change stream event.
 ///
 /// This is the primary type that flows through the Rigatoni pipeline.
-/// It represents a single change operation from MongoDB change streams.
+/// It represents a single change operation from `MongoDB` change streams.
 ///
 /// # Memory Layout
 ///
@@ -283,56 +279,65 @@ pub struct ChangeEvent {
 impl ChangeEvent {
     /// Returns true if this is an insert operation.
     #[inline]
+    #[must_use]
     pub fn is_insert(&self) -> bool {
         self.operation == OperationType::Insert
     }
 
     /// Returns true if this is an update operation.
     #[inline]
+    #[must_use]
     pub fn is_update(&self) -> bool {
         self.operation == OperationType::Update
     }
 
     /// Returns true if this is a delete operation.
     #[inline]
+    #[must_use]
     pub fn is_delete(&self) -> bool {
         self.operation == OperationType::Delete
     }
 
     /// Returns true if this is a replace operation.
     #[inline]
+    #[must_use]
     pub fn is_replace(&self) -> bool {
         self.operation == OperationType::Replace
     }
 
     /// Returns true if this is an invalidate operation.
     #[inline]
+    #[must_use]
     pub fn is_invalidate(&self) -> bool {
         self.operation == OperationType::Invalidate
     }
 
     /// Returns the collection name.
     #[inline]
+    #[must_use]
     pub fn collection_name(&self) -> &str {
         &self.namespace.collection
     }
 
     /// Returns the database name.
     #[inline]
+    #[must_use]
     pub fn database_name(&self) -> &str {
         &self.namespace.database
     }
 
     /// Returns the fully qualified namespace as "database.collection".
     #[inline]
+    #[must_use]
     pub fn full_namespace(&self) -> String {
         self.namespace.full_name()
     }
 
     /// Returns the document ID if present in the document key.
     ///
-    /// Most MongoDB documents have an `_id` field in the document key.
-    /// Returns None if document_key is not present (e.g., invalidate events).
+    /// Most `MongoDB` documents have an `_id` field in the document key.
+    /// Returns None if `document_key` is not present (e.g., invalidate events).
+    #[must_use]
     pub fn document_id(&self) -> Option<&bson::Bson> {
         self.document_key.as_ref()?.get("_id")
     }
@@ -341,7 +346,8 @@ impl ChangeEvent {
     ///
     /// Useful for checking if the document data is available.
     #[inline]
-    pub fn has_full_document(&self) -> bool {
+    #[must_use]
+    pub const fn has_full_document(&self) -> bool {
         self.full_document.is_some()
     }
 
@@ -349,13 +355,15 @@ impl ChangeEvent {
     ///
     /// Only present for update operations.
     #[inline]
-    pub fn has_update_description(&self) -> bool {
+    #[must_use]
+    pub const fn has_update_description(&self) -> bool {
         self.update_description.is_some()
     }
 
     /// Returns the size estimate of this event in bytes.
     ///
     /// Useful for batching and memory management.
+    #[must_use]
     pub fn estimated_size_bytes(&self) -> usize {
         let mut size = std::mem::size_of::<Self>();
 
@@ -369,7 +377,7 @@ impl ChangeEvent {
             size += update_desc
                 .removed_fields
                 .iter()
-                .map(|s| s.len())
+                .map(String::len)
                 .sum::<usize>();
         }
 
@@ -389,9 +397,9 @@ fn estimate_document_size(doc: &Document) -> usize {
     doc.len() * 50
 }
 
-/// Conversion from MongoDB driver's ChangeStreamEvent.
+/// Conversion from `MongoDB` driver's `ChangeStreamEvent`.
 ///
-/// This enables seamless integration with the official MongoDB Rust driver.
+/// This enables seamless integration with the official `MongoDB` Rust driver.
 /// Returns an error if the resume token cannot be converted to a BSON document.
 impl TryFrom<mongodb::change_stream::event::ChangeStreamEvent<Document>> for ChangeEvent {
     type Error = ConversionError;
@@ -416,25 +424,24 @@ impl TryFrom<mongodb::change_stream::event::ChangeStreamEvent<Document>> for Cha
                 // This ensures forward compatibility with new MongoDB versions
                 let op_str = format!("{:?}", event.operation_type);
                 eprintln!(
-                    "Warning: Unknown MongoDB operation type encountered: {}. \
-                     This may indicate a newer MongoDB version than supported.",
-                    op_str
+                    "Warning: Unknown MongoDB operation type encountered: {op_str}. \
+                     This may indicate a newer MongoDB version than supported."
                 );
                 OperationType::Unknown(op_str)
             }
         };
 
         // Convert namespace
-        let namespace = event
-            .ns
-            .map(|ns| Namespace {
-                database: ns.db,
-                collection: ns.coll.unwrap_or_default(),
-            })
-            .unwrap_or_else(|| Namespace {
+        let namespace = event.ns.map_or_else(
+            || Namespace {
                 database: String::new(),
                 collection: String::new(),
-            });
+            },
+            |ns| Namespace {
+                database: ns.db,
+                collection: ns.coll.unwrap_or_default(),
+            },
+        );
 
         // Convert update description
         let update_description = event.update_description.map(|ud| UpdateDescription {
@@ -445,7 +452,7 @@ impl TryFrom<mongodb::change_stream::event::ChangeStreamEvent<Document>> for Cha
                     .into_iter()
                     .map(|ta| TruncatedArray {
                         field: ta.field,
-                        new_size: ta.new_size as u32,
+                        new_size: u32::try_from(ta.new_size).unwrap_or(0),
                     })
                     .collect()
             }),
@@ -456,8 +463,11 @@ impl TryFrom<mongodb::change_stream::event::ChangeStreamEvent<Document>> for Cha
         // We map increment to nanoseconds to preserve ordering of events within the same second
         let cluster_time = event
             .cluster_time
-            .map(|ts| {
-                let seconds = ts.time as i64;
+            .map_or_else(|| {
+                eprintln!("Warning: Missing cluster_time in ChangeStreamEvent, using current time");
+                Utc::now()
+            }, |ts| {
+                let seconds = i64::from(ts.time);
                 // Map increment to nanoseconds for sub-second precision
                 // This preserves event ordering within the same second
                 let nanos = ts.increment * 1_000_000; // Scale increment to nanosecond range
@@ -470,17 +480,12 @@ impl TryFrom<mongodb::change_stream::event::ChangeStreamEvent<Document>> for Cha
                         );
                         Utc::now()
                     })
-            })
-            .unwrap_or_else(|| {
-                eprintln!("Warning: Missing cluster_time in ChangeStreamEvent, using current time");
-                Utc::now()
             });
 
         // Convert resume token - this is critical for stream resumption
         let resume_token = bson::to_document(&event.id).map_err(|e| {
             ConversionError::ResumeTokenConversion(format!(
-                "Failed to serialize resume token to BSON document: {}",
-                e
+                "Failed to serialize resume token to BSON document: {e}"
             ))
         })?;
 
