@@ -2,11 +2,11 @@
 //!
 //! These tests verify the complete functionality of ChangeEvent and related types.
 
+use bson::{doc, Bson};
+use chrono::Utc;
 use rigatoni_core::event::{
     ChangeEvent, Namespace, OperationType, TruncatedArray, UpdateDescription,
 };
-use bson::{doc, Bson};
-use chrono::Utc;
 
 #[test]
 fn test_operation_type_serialization() {

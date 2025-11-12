@@ -266,10 +266,7 @@ pub struct ChangeEvent {
     /// Description of what changed in an update operation
     ///
     /// Present only for update operations.
-    #[serde(
-        rename = "updateDescription",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "updateDescription", skip_serializing_if = "Option::is_none")]
     pub update_description: Option<UpdateDescription>,
 
     /// Timestamp of the operation in the oplog
@@ -369,7 +366,11 @@ impl ChangeEvent {
 
         if let Some(update_desc) = &self.update_description {
             size += estimate_document_size(&update_desc.updated_fields);
-            size += update_desc.removed_fields.iter().map(|s| s.len()).sum::<usize>();
+            size += update_desc
+                .removed_fields
+                .iter()
+                .map(|s| s.len())
+                .sum::<usize>();
         }
 
         if let Some(doc_key) = &self.document_key {
@@ -424,13 +425,16 @@ impl TryFrom<mongodb::change_stream::event::ChangeStreamEvent<Document>> for Cha
         };
 
         // Convert namespace
-        let namespace = event.ns.map(|ns| Namespace {
-            database: ns.db,
-            collection: ns.coll.unwrap_or_default(),
-        }).unwrap_or_else(|| Namespace {
-            database: String::new(),
-            collection: String::new(),
-        });
+        let namespace = event
+            .ns
+            .map(|ns| Namespace {
+                database: ns.db,
+                collection: ns.coll.unwrap_or_default(),
+            })
+            .unwrap_or_else(|| Namespace {
+                database: String::new(),
+                collection: String::new(),
+            });
 
         // Convert update description
         let update_description = event.update_description.map(|ud| UpdateDescription {
