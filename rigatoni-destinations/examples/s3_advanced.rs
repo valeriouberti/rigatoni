@@ -139,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Writing to S3...");
     let start = std::time::Instant::now();
 
-    destination.write_batch(events).await?;
+    destination.write_batch(&events).await?;
     destination.flush().await?;
 
     let elapsed = start.elapsed();

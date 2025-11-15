@@ -203,10 +203,62 @@ impl PipelineConfigBuilder {
     ///
     /// # Errors
     ///
-    /// Returns an error if required fields are missing.
-    pub fn build(self) -> Result<PipelineConfig, String> {
-        let mongodb_uri = self.mongodb_uri.ok_or("mongodb_uri is required")?;
-        let database = self.database.ok_or("database is required")?;
+    /// Returns an error if required fields are missing or invalid.
+    pub fn build(self) -> Result<PipelineConfig, ConfigError> {
+        let mongodb_uri = self.mongodb_uri.ok_or(ConfigError::MissingMongoUri)?;
+        let database = self.database.ok_or(ConfigError::MissingDatabase)?;
+
+        // Validate batch size
+        let batch_size = match self.batch_size {
+            0 => 100, // Default
+            size if size > 10_000 => {
+                return Err(ConfigError::InvalidBatchSize {
+                    value: size,
+                    reason: "batch_size exceeds maximum (10,000)",
+                })
+            }
+            size => size,
+        };
+
+        // Validate batch timeout
+        let batch_timeout = if self.batch_timeout.is_zero() {
+            Duration::from_secs(5) // Default
+        } else {
+            self.batch_timeout
+        };
+
+        // Set retry delays with defaults
+        let retry_delay = if self.retry_delay.is_zero() {
+            Duration::from_millis(100)
+        } else {
+            self.retry_delay
+        };
+
+        let max_retry_delay = if self.max_retry_delay.is_zero() {
+            Duration::from_secs(30)
+        } else {
+            self.max_retry_delay
+        };
+
+        // Cross-field validation: retry_delay must not exceed max_retry_delay
+        if retry_delay > max_retry_delay {
+            return Err(ConfigError::RetryDelayExceedsMax {
+                retry_delay,
+                max_retry_delay,
+            });
+        }
+
+        // Validate channel buffer size
+        let channel_buffer_size = match self.channel_buffer_size {
+            0 => 1000, // Default
+            size if size < 10 => {
+                return Err(ConfigError::InvalidChannelBufferSize {
+                    value: size,
+                    reason: "channel_buffer_size must be at least 10",
+                })
+            }
+            size => size,
+        };
 
         let stream_config = self.stream_config.unwrap_or_else(|| {
             ChangeStreamConfig::builder()
@@ -218,32 +270,12 @@ impl PipelineConfigBuilder {
             mongodb_uri,
             database,
             collections: self.collections,
-            batch_size: if self.batch_size > 0 {
-                self.batch_size
-            } else {
-                100
-            },
-            batch_timeout: if self.batch_timeout.is_zero() {
-                Duration::from_secs(5)
-            } else {
-                self.batch_timeout
-            },
+            batch_size,
+            batch_timeout,
             max_retries: self.max_retries,
-            retry_delay: if self.retry_delay.is_zero() {
-                Duration::from_millis(100)
-            } else {
-                self.retry_delay
-            },
-            max_retry_delay: if self.max_retry_delay.is_zero() {
-                Duration::from_secs(30)
-            } else {
-                self.max_retry_delay
-            },
-            channel_buffer_size: if self.channel_buffer_size > 0 {
-                self.channel_buffer_size
-            } else {
-                1000
-            },
+            retry_delay,
+            max_retry_delay,
+            channel_buffer_size,
             stream_config,
         })
     }
@@ -338,18 +370,22 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             return Err(PipelineError::AlreadyRunning);
         }
 
+        // Early validation: watching all collections is not yet supported
+        if self.config.collections.is_empty() {
+            return Err(PipelineError::Configuration(
+                "Watching all collections is not yet implemented. \
+                 Please specify explicit collections in the configuration."
+                    .to_string(),
+            ));
+        }
+
         info!("Starting pipeline");
 
         // Create shutdown channel (broadcast so all workers get the signal)
         let (shutdown_tx, _) = broadcast::channel(1);
         self.shutdown_tx = Some(shutdown_tx.clone());
 
-        let collections = if self.config.collections.is_empty() {
-            // Watch all collections - use a single worker
-            vec![String::new()]
-        } else {
-            self.config.collections.clone()
-        };
+        let collections = self.config.collections.clone();
 
         // Spawn worker for each collection
         let mut workers = self.workers.write().await;
@@ -610,7 +646,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         debug!("Flushing batch to destination");
 
         // Write to destination with retry
-        Self::write_with_retry(batch, destination, config).await?;
+        Self::write_with_retry(batch, destination, config, stats).await?;
 
         let elapsed = start_time.elapsed();
         info!(
@@ -641,17 +677,18 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     }
 
     /// Writes a batch to the destination with exponential backoff retry.
-    #[instrument(skip(batch, destination, config), fields(batch_size = batch.len()))]
+    #[instrument(skip(batch, destination, config, stats), fields(batch_size = batch.len()))]
     async fn write_with_retry(
         batch: &[ChangeEvent],
         destination: &Arc<Mutex<D>>,
         config: &PipelineConfig,
+        stats: &Arc<RwLock<PipelineStats>>,
     ) -> Result<(), PipelineError> {
         let mut retry_delay = config.retry_delay;
         let mut attempt = 0;
 
         loop {
-            match destination.lock().await.write_batch(batch.to_vec()).await {
+            match destination.lock().await.write_batch(batch).await {
                 Ok(()) => {
                     if attempt > 0 {
                         info!(attempts = attempt + 1, "Write succeeded after retries");
@@ -659,6 +696,12 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                     return Ok(());
                 }
                 Err(e) => {
+                    // Increment write error counter for each failed attempt
+                    {
+                        let mut s = stats.write().await;
+                        s.write_errors += 1;
+                    }
+
                     attempt += 1;
 
                     if attempt > config.max_retries {
@@ -670,6 +713,12 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                     if !Self::is_retryable_error(&e) {
                         error!(?e, "Non-retryable error encountered");
                         return Err(PipelineError::Destination(e.to_string()));
+                    }
+
+                    // Increment retry counter (only for actual retries, not initial attempt)
+                    {
+                        let mut s = stats.write().await;
+                        s.retries += 1;
                     }
 
                     warn!(
@@ -774,6 +823,37 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     pub async fn is_running(&self) -> bool {
         *self.running.read().await
     }
+}
+
+/// Pipeline configuration errors.
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    /// Missing required MongoDB URI
+    #[error("mongodb_uri is required")]
+    MissingMongoUri,
+
+    /// Missing required database name
+    #[error("database is required")]
+    MissingDatabase,
+
+    /// Invalid batch size
+    #[error("Invalid batch_size: {value} ({reason})")]
+    InvalidBatchSize { value: usize, reason: &'static str },
+
+    /// Invalid batch timeout
+    #[error("Invalid batch_timeout: {reason}")]
+    InvalidBatchTimeout { reason: &'static str },
+
+    /// Retry delay exceeds maximum
+    #[error("retry_delay ({retry_delay:?}) exceeds max_retry_delay ({max_retry_delay:?})")]
+    RetryDelayExceedsMax {
+        retry_delay: Duration,
+        max_retry_delay: Duration,
+    },
+
+    /// Invalid channel buffer size
+    #[error("Invalid channel_buffer_size: {value} ({reason})")]
+    InvalidChannelBufferSize { value: usize, reason: &'static str },
 }
 
 /// Pipeline errors.

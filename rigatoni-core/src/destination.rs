@@ -73,10 +73,10 @@
 //!
 //! #[async_trait]
 //! impl Destination for FileDestination {
-//!     async fn write_batch(&mut self, events: Vec<ChangeEvent>) -> Result<(), DestinationError> {
+//!     async fn write_batch(&mut self, events: &[ChangeEvent]) -> Result<(), DestinationError> {
 //!         // Buffer events as JSON lines
 //!         for event in events {
-//!             let json = serde_json::to_string(&event)
+//!             let json = serde_json::to_string(event)
 //!                 .map_err(|e| DestinationError::serialization(e, "Failed to serialize event"))?;
 //!             self.buffer.push(json);
 //!         }
@@ -109,7 +109,7 @@
 //! # use rigatoni_core::event::ChangeEvent;
 //! # async fn example(mut dest: impl Destination, events: Vec<ChangeEvent>) -> Result<(), DestinationError> {
 //! // Write a batch of events
-//! dest.write_batch(events).await?;
+//! dest.write_batch(&events).await?;
 //!
 //! // Flush to ensure durability
 //! dest.flush().await?;
@@ -577,14 +577,14 @@ pub trait Destination: Send + Sync {
     /// # use rigatoni_core::event::ChangeEvent;
     /// # async fn example(mut dest: impl Destination, events: Vec<ChangeEvent>) -> Result<(), DestinationError> {
     /// // Write a batch
-    /// dest.write_batch(events).await?;
+    /// dest.write_batch(&events).await?;
     ///
     /// // Empty batches are allowed
-    /// dest.write_batch(vec![]).await?;
+    /// dest.write_batch(&[]).await?;
     /// # Ok(())
     /// # }
     /// ```
-    async fn write_batch(&mut self, events: Vec<ChangeEvent>) -> Result<(), DestinationError>;
+    async fn write_batch(&mut self, events: &[ChangeEvent]) -> Result<(), DestinationError>;
 
     /// Flushes any buffered data to ensure durability.
     ///
@@ -631,7 +631,7 @@ pub trait Destination: Send + Sync {
     /// # async fn example(mut dest: impl Destination, batches: Vec<Vec<ChangeEvent>>) -> Result<(), DestinationError> {
     /// // Write multiple batches
     /// for batch in batches {
-    ///     dest.write_batch(batch).await?;
+    ///     dest.write_batch(&batch).await?;
     /// }
     ///
     /// // Ensure everything is persisted

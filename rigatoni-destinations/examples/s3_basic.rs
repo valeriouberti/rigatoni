@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Writing {} events to S3...", events.len());
 
     // Write batch to S3
-    destination.write_batch(events).await?;
+    destination.write_batch(&events).await?;
 
     // Flush to ensure data is written
     println!("Flushing to S3...");

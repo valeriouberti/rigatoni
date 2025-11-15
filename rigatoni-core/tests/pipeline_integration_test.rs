@@ -120,7 +120,7 @@ impl MockDestination {
 
 #[async_trait::async_trait]
 impl Destination for MockDestination {
-    async fn write_batch(&mut self, events: Vec<ChangeEvent>) -> Result<(), DestinationError> {
+    async fn write_batch(&mut self, events: &[ChangeEvent]) -> Result<(), DestinationError> {
         let mut count = self.write_count.lock().await;
         *count += 1;
 
@@ -139,7 +139,7 @@ impl Destination for MockDestination {
             *self.should_fail.lock().await = false;
         }
 
-        self.batches.lock().await.push(events);
+        self.batches.lock().await.push(events.to_vec());
         Ok(())
     }
 
@@ -219,7 +219,11 @@ async fn test_pipeline_config_builder_missing_required() {
     let config = PipelineConfig::builder().database("test_db").build();
 
     assert!(config.is_err());
-    assert!(config.unwrap_err().contains("mongodb_uri"));
+    let err = config.unwrap_err();
+    assert!(matches!(
+        err,
+        rigatoni_core::pipeline::ConfigError::MissingMongoUri
+    ));
 }
 
 #[tokio::test]
