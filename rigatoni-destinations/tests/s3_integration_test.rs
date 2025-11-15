@@ -100,7 +100,7 @@ async fn test_s3_basic_write() {
 
     // Write events
     destination
-        .write_batch(events)
+        .write_batch(&events)
         .await
         .expect("Failed to write batch");
 
@@ -142,7 +142,7 @@ async fn test_s3_with_gzip_compression() {
         .collect();
 
     destination
-        .write_batch(events)
+        .write_batch(&events)
         .await
         .expect("Failed to write batch");
 
@@ -175,7 +175,7 @@ async fn test_s3_with_zstd_compression() {
     let events: Vec<_> = (1..=20).map(|i| create_test_event("metrics", i)).collect();
 
     destination
-        .write_batch(events)
+        .write_batch(&events)
         .await
         .expect("Failed to write batch");
 
@@ -212,7 +212,7 @@ async fn test_s3_hive_partitioning() {
     ];
 
     destination
-        .write_batch(events)
+        .write_batch(&events)
         .await
         .expect("Failed to write batch");
 
@@ -248,7 +248,7 @@ async fn test_s3_csv_format() {
     ];
 
     destination
-        .write_batch(events)
+        .write_batch(&events)
         .await
         .expect("Failed to write batch");
 
@@ -284,7 +284,7 @@ async fn test_s3_parquet_format() {
     ];
 
     destination
-        .write_batch(events)
+        .write_batch(&events)
         .await
         .expect("Failed to write batch");
 
@@ -320,7 +320,7 @@ async fn test_s3_avro_format() {
     ];
 
     destination
-        .write_batch(events)
+        .write_batch(&events)
         .await
         .expect("Failed to write batch");
 

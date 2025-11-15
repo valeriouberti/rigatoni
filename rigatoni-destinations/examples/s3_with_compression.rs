@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nWriting to S3 with {:?} compression...", compression);
 
     let start = std::time::Instant::now();
-    destination.write_batch(events).await?;
+    destination.write_batch(&events).await?;
     destination.flush().await?;
     let elapsed = start.elapsed();
 
