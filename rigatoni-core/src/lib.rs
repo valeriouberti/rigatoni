@@ -22,6 +22,7 @@
 //! # Key Components
 //!
 //! - **Events**: [`event`] module defines `MongoDB` change stream events
+//! - **Stream**: [`stream`] module provides `MongoDB` change stream listener with auto-reconnection
 //! - **Destination**: [`destination`] module defines the destination trait for writing events
 //! - **Pipeline**: Core pipeline orchestration (coming soon)
 //! - **Traits**: Source and Transform traits (coming soon)
@@ -43,3 +44,4 @@
 
 pub mod destination;
 pub mod event;
+pub mod stream;

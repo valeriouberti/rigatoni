@@ -1,4 +1,8 @@
-# Rigatoni 🍝
+# Rigatoni
+
+<p align="center">
+    <img src="assets/logo.webp" alt="Rigatoni Logo" width="180" />
+</p>
 
 [![CI](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml/badge.svg)](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
@@ -109,6 +113,7 @@ We provide a pre-push script to run all CI checks locally:
 ```
 
 This runs:
+
 - All tests (default features, all features, no default features)
 - Clippy linting with strict rules
 - Rustfmt formatting checks
@@ -135,6 +140,7 @@ To report security vulnerabilities, please email: valeriouberti@icloud.com
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 Quick checklist:
+
 1. Fork the repository
 2. Create a feature branch
 3. Write tests for your changes
