@@ -47,6 +47,8 @@ reqwest = { workspace = true }
 # Serialization formats (optional, enabled by features)
 csv = { workspace = true, optional = true }
 parquet = { workspace = true, optional = true }
+arrow-schema = { workspace = true, optional = true }
+arrow-array = { workspace = true, optional = true }
 apache-avro = { workspace = true, optional = true }
 
 # Compression (optional, enabled by features)
@@ -75,6 +77,8 @@ optional = true
 [dev-dependencies]
 mockall = { workspace = true }
 tokio-test = { workspace = true }
+bson = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [features]
 # Default enables common destinations
@@ -90,7 +94,7 @@ kafka = ["rdkafka", "avro"]
 # File format support
 json = []
 csv = ["dep:csv"]
-parquet = ["dep:parquet"]
+parquet = ["dep:parquet", "dep:arrow-schema", "dep:arrow-array"]
 avro = ["dep:apache-avro"]
 
 # Compression support

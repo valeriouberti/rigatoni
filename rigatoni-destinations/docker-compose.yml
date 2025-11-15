@@ -1,0 +1,74 @@
+# Docker Compose for LocalStack S3 testing
+#
+# Start LocalStack:
+#   docker-compose up -d
+#
+# Stop LocalStack:
+#   docker-compose down
+#
+# View logs:
+#   docker-compose logs -f
+#
+# Create test bucket:
+#   aws --endpoint-url=http://localhost:4566 s3 mb s3://test-bucket
+
+version: '3.8'
+
+services:
+  localstack:
+    container_name: rigatoni-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      # Services to emulate
+      - SERVICES=s3
+      # Enable debug output
+      - DEBUG=1
+      # Use default AWS region
+      - DEFAULT_REGION=us-east-1
+      # Disable SSL
+      - DISABLE_SSL=1
+      # Data persistence
+      - DATA_DIR=/tmp/localstack/data
+      # Allow CORS
+      - EXTRA_CORS_ALLOWED_ORIGINS=*
+    volumes:
+      # Mount a volume for data persistence
+      - "./localstack-data:/tmp/localstack"
+      # Mount Docker socket for Lambda execution
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - rigatoni-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: AWS CLI for manual testing
+  aws-cli:
+    container_name: rigatoni-aws-cli
+    image: amazon/aws-cli:latest
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: /bin/sh
+    command: >
+      -c "
+      aws --endpoint-url=http://localstack:4566 s3 mb s3://test-bucket || true &&
+      echo 'LocalStack S3 is ready!' &&
+      echo 'Test bucket created: test-bucket' &&
+      tail -f /dev/null
+      "
+    networks:
+      - rigatoni-network
+
+networks:
+  rigatoni-network:
+    driver: bridge

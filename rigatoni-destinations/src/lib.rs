@@ -14,4 +14,56 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Placeholder for rigatoni-destinations library
+//! Rigatoni Destinations - ETL Destination Implementations
+//!
+//! This crate provides production-ready destination implementations for the Rigatoni ETL framework.
+//! Destinations are the final stage in the ETL pipeline where processed events are written
+//! to external systems.
+//!
+//! # Available Destinations
+//!
+//! - **S3**: AWS S3 and S3-compatible storage (MinIO, LocalStack)
+//! - **BigQuery**: Google BigQuery (coming soon)
+//! - **Kafka**: Apache Kafka (coming soon)
+//!
+//! # Features
+//!
+//! Destinations are enabled via Cargo features:
+//!
+//! - `s3` - AWS S3 destination (default)
+//! - `bigquery` - Google BigQuery destination
+//! - `kafka` - Apache Kafka destination
+//! - `json` - JSON serialization support (default)
+//! - `csv` - CSV serialization support (default)
+//! - `parquet` - Apache Parquet serialization support
+//! - `avro` - Apache Avro serialization support
+//! - `gzip` - Gzip compression support
+//! - `zstandard` - Zstandard compression support
+//!
+//! # Quick Start
+//!
+//! ```rust,ignore
+//! use rigatoni_destinations::s3::{S3Destination, S3Config};
+//! use rigatoni_core::Destination;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let config = S3Config::builder()
+//!         .bucket("my-data-lake")
+//!         .region("us-east-1")
+//!         .prefix("mongodb/events")
+//!         .build()?;
+//!
+//!     let mut destination = S3Destination::new(config).await?;
+//!
+//!     // Use with change stream listener
+//!     // listener.pipe_to(destination).await?;
+//!
+//!     destination.close().await?;
+//!     Ok(())
+//! }
+//! ```
+
+// S3 destination module (enabled with "s3" feature)
+#[cfg(feature = "s3")]
+pub mod s3;
