@@ -53,6 +53,9 @@ metrics = { workspace = true }
 # Schema management
 schemars = { workspace = true }
 
+# Random for jitter
+rand = { workspace = true }
+
 [dev-dependencies]
 mockall = { workspace = true }
 tokio-test = { workspace = true }

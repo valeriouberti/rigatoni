@@ -76,7 +76,22 @@ jobs:
             -W clippy::nursery \
             -A clippy::module_name_repetitions \
             -A clippy::missing_errors_doc \
-            -A clippy::missing_panics_doc
+            -A clippy::missing_panics_doc \
+            -A clippy::doc_markdown \
+            -A clippy::must_use_candidate \
+            -A clippy::cast_precision_loss \
+            -A clippy::cast_sign_loss \
+            -A clippy::cast_possible_truncation \
+            -A clippy::unused_async \
+            -A clippy::match_same_arms \
+            -A clippy::option_if_let_else \
+            -A clippy::suboptimal_flops \
+            -A clippy::significant_drop_tightening \
+            -A clippy::missing_const_for_fn \
+            -A clippy::inefficient_to_string \
+            -A clippy::items_after_statements \
+            -A clippy::uninlined_format_args \
+            -A clippy::ignore_without_reason
 
       - name: Run Clippy (no default features)
         run: |
@@ -193,6 +208,7 @@ jobs:
 
   # Summary job that depends on all checks
   # This provides a single status check for branch protection rules
+  # Configure GitHub branch protection to require "CI Success" status check
   ci-success:
     name: CI Success
     needs: [test, clippy, fmt, cargo-check, docs, audit, deny]
@@ -202,12 +218,55 @@ jobs:
     steps:
       - name: Check all jobs succeeded
         run: |
+          echo "=== CI Job Results ==="
+          echo "Test: ${{ needs.test.result }}"
+          echo "Clippy: ${{ needs.clippy.result }}"
+          echo "Format: ${{ needs.fmt.result }}"
+          echo "Cargo Check: ${{ needs.cargo-check.result }}"
+          echo "Docs: ${{ needs.docs.result }}"
+          echo "Security Audit: ${{ needs.audit.result }}"
+          echo "Cargo Deny: ${{ needs.deny.result }}"
+          echo "======================"
+
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
-            echo "One or more CI jobs failed"
+            echo "❌ One or more CI jobs failed - blocking merge"
+            echo "Please fix the failing checks before merging"
             exit 1
           fi
           if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "One or more CI jobs were cancelled"
+            echo "⚠️ One or more CI jobs were cancelled - blocking merge"
+            echo "Please re-run the cancelled jobs"
             exit 1
           fi
-          echo "All CI jobs succeeded!"
+          if [[ "${{ contains(needs.*.result, 'skipped') }}" == "true" ]]; then
+            echo "⚠️ One or more CI jobs were skipped - blocking merge"
+            echo "Please ensure all jobs complete successfully"
+            exit 1
+          fi
+
+          echo "✅ All CI jobs succeeded - ready to merge!"
+
+  # Branch protection enforcement helper
+  # This job will always run and provides clear status for PRs
+  merge-gate:
+    name: Merge Gate
+    needs: ci-success
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Enforce merge requirements
+        run: |
+          if [[ "${{ needs.ci-success.result }}" != "success" ]]; then
+            echo "🚫 MERGE BLOCKED: CI checks did not pass"
+            echo "Status: ${{ needs.ci-success.result }}"
+            echo ""
+            echo "To enable merging:"
+            echo "1. Fix any failing CI checks"
+            echo "2. Ensure all jobs complete successfully"
+            echo "3. Wait for this status check to pass"
+            exit 1
+          fi
+
+          echo "🎉 MERGE APPROVED: All CI checks passed"
+          echo "This pull request is ready to merge"

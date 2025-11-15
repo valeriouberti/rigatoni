@@ -93,3 +93,6 @@ dashmap = "6.1"
 
 # Schema management
 schemars = { version = "0.8", features = ["chrono", "uuid1"] }
+
+# Random number generation (for backoff jitter)
+rand = "0.8"
