@@ -12,20 +12,28 @@
 
 ## 🎯 Overview
 
-Rigatoni is a modern ETL framework built for speed, reliability, and developer experience. Currently supporting:
+Rigatoni is a modern ETL framework built for speed, reliability, and developer experience. Built with Rust's type system and async/await, it provides production-ready data pipelines for real-time streaming workloads.
 
-- **S3 destination** for data export
-- **Async-first design** powered by Tokio
-- **Type-safe transformations** with compile-time guarantees
-- **Modular architecture** for extensibility
+**Currently supporting:**
+
+- **MongoDB Change Streams** - Real-time CDC (Change Data Capture) from MongoDB
+- **S3 Destination** - Export to AWS S3 with multiple formats (JSON, CSV, Parquet, Avro)
+- **Pipeline Orchestration** - Multi-worker architecture with retry logic and state management
+- **Async-first design** - Powered by Tokio for high throughput
+- **Type-safe transformations** - Compile-time guarantees with Rust's type system
+- **Modular architecture** - Extensible with feature flags
 
 ## ✨ Features
 
-- 🚀 **High Performance**: Async/await architecture
-- 🔒 **Type Safety**: Leverage Rust's type system for data transformation
-- 📦 **S3 Integration**: Export data to AWS S3
-- 🎨 **Composable Pipelines**: Build ETL workflows from simple components
-- 🧪 **Testable**: Comprehensive test utilities
+- 🚀 **High Performance**: Async/await architecture with Tokio for concurrent processing
+- 🔒 **Type Safety**: Leverage Rust's type system for data transformation guarantees
+- 📊 **MongoDB CDC**: Real-time change stream listening with resume token support
+- 📦 **S3 Integration**: Multiple formats (JSON, CSV, Parquet, Avro) with compression (gzip, zstd)
+- 🔄 **Retry Logic**: Exponential backoff with configurable limits
+- 🎯 **Batching**: Automatic batching based on size and time windows
+- 🎨 **Composable Pipelines**: Build ETL workflows from simple, testable components
+- 📝 **Observability**: Comprehensive tracing and metrics
+- 🧪 **Testable**: Mock destinations and comprehensive test utilities
 
 ## 🏗️ Architecture
 
@@ -63,27 +71,53 @@ rigatoni-core = "0.1"
 rigatoni-destinations = "0.1"
 ```
 
-### Basic Example
+### Basic Example: MongoDB to S3 Pipeline
 
 ```rust
-use rigatoni_destinations::S3Destination;
+use rigatoni_core::pipeline::{Pipeline, PipelineConfig};
+use rigatoni_destinations::s3::{S3Config, S3Destination};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create an S3 destination
-    let destination = S3Destination::new("my-bucket").await?;
+    // Configure S3 destination
+    let s3_config = S3Config::builder()
+        .bucket("my-data-lake")
+        .region("us-east-1")
+        .prefix("mongodb-cdc")
+        .build()?;
 
-    // Export data to S3
-    destination.write(data).await?;
+    let destination = S3Destination::new(s3_config).await?;
+
+    // Configure pipeline
+    let config = PipelineConfig::builder()
+        .mongodb_uri("mongodb://localhost:27017")
+        .database("mydb")
+        .collections(vec!["users", "orders"])
+        .batch_size(1000)
+        .build()?;
+
+    // Run pipeline
+    let mut pipeline = Pipeline::new(config, destination).await?;
+    pipeline.run().await?;
 
     Ok(())
 }
 ```
 
+See [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) for detailed tutorials.
+
 ## 📚 Documentation
 
+**User Documentation:**
+- [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) - Quick start guide and tutorials
+- [Architecture Guide](https://valeriouberti.github.io/rigatoni/architecture) - System design and concepts
+- [API Reference](https://docs.rs/rigatoni) - Complete API documentation
+- [User Guides](https://valeriouberti.github.io/rigatoni/guides/) - Task-specific guides
+
+**Developer Documentation:**
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute
 - [CI/CD Guide](.github/CI_GUIDE.md) - Development workflow
+- [Workspace Guide](docs/README-WORKSPACE.md) - Workspace structure and dependencies
 
 ## 🛠️ Development
 

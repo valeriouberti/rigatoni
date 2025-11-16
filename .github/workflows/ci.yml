@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    tags:
+      - 'v*.*.*'  # Trigger on version tags (e.g., v0.1.0)
   pull_request:
     branches: [main, develop]
   # Allow manual triggering from the Actions tab
@@ -270,3 +272,88 @@ jobs:
 
           echo "🎉 MERGE APPROVED: All CI checks passed"
           echo "This pull request is ready to merge"
+
+  # Release to crates.io - only runs on version tags (not on PRs or regular commits)
+  release:
+    name: Publish to crates.io
+    needs: [ci-success]
+    runs-on: ubuntu-latest
+    # Only run on version tags (e.g., v0.1.0), not on PRs or regular pushes
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+
+      - name: Verify version in Cargo.toml matches tag
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          CARGO_VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+
+          echo "Tag version: $TAG_VERSION"
+          echo "Cargo.toml version: $CARGO_VERSION"
+
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "❌ Version mismatch!"
+            echo "Git tag version (v$TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
+            exit 1
+          fi
+
+          echo "✅ Version matches: $TAG_VERSION"
+
+      - name: Publish rigatoni-core to crates.io
+        run: |
+          echo "Publishing rigatoni-core..."
+          cd rigatoni-core
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --allow-dirty
+          echo "✅ rigatoni-core published successfully"
+
+      - name: Wait for crates.io to index rigatoni-core
+        run: |
+          echo "Waiting 30 seconds for crates.io to index rigatoni-core..."
+          sleep 30
+
+      - name: Publish rigatoni-destinations to crates.io
+        run: |
+          echo "Publishing rigatoni-destinations..."
+          cd rigatoni-destinations
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --allow-dirty
+          echo "✅ rigatoni-destinations published successfully"
+
+      - name: Wait for crates.io to index rigatoni-destinations
+        run: |
+          echo "Waiting 30 seconds for crates.io to index rigatoni-destinations..."
+          sleep 30
+
+      - name: Publish rigatoni-stores to crates.io
+        run: |
+          echo "Publishing rigatoni-stores..."
+          cd rigatoni-stores
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --allow-dirty
+          echo "✅ rigatoni-stores published successfully"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          body: |
+            ## 📦 Published to crates.io
+
+            This release has been published to crates.io:
+            - [`rigatoni-core`](https://crates.io/crates/rigatoni-core)
+            - [`rigatoni-destinations`](https://crates.io/crates/rigatoni-destinations)
+            - [`rigatoni-stores`](https://crates.io/crates/rigatoni-stores)
+
+            ## 📚 Documentation
+
+            - [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started)
+            - [API Documentation](https://docs.rs/rigatoni)
+            - [Changelog](https://github.com/valeriouberti/rigatoni/blob/main/CHANGELOG.md)
