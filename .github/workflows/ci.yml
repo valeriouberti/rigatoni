@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop]
     tags:
-      - 'v*.*.*'  # Trigger on version tags (e.g., v0.1.0)
+      - "v*.*.*" # Trigger on version tags (e.g., v0.1.0)
   pull_request:
     branches: [main, develop]
   # Allow manual triggering from the Actions tab
