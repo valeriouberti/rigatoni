@@ -552,7 +552,7 @@ impl S3Destination {
 
 #[async_trait]
 impl Destination for S3Destination {
-    async fn write_batch(&mut self, events: Vec<ChangeEvent>) -> Result<(), DestinationError> {
+    async fn write_batch(&mut self, events: &[ChangeEvent]) -> Result<(), DestinationError> {
         if self.closed {
             return Err(DestinationError::write_msg(
                 "Cannot write to closed S3 destination",
@@ -566,7 +566,7 @@ impl Destination for S3Destination {
         }
 
         debug!("Buffering {} events for S3", events.len());
-        self.buffer.extend(events);
+        self.buffer.extend_from_slice(events);
 
         Ok(())
     }

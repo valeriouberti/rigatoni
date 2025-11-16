@@ -133,7 +133,7 @@ impl MockDestination {
 
 #[async_trait]
 impl Destination for MockDestination {
-    async fn write_batch(&mut self, events: Vec<ChangeEvent>) -> Result<(), DestinationError> {
+    async fn write_batch(&mut self, events: &[ChangeEvent]) -> Result<(), DestinationError> {
         if self.fail_writes {
             return Err(DestinationError::write_msg("Simulated write failure", true));
         }
@@ -146,7 +146,7 @@ impl Destination for MockDestination {
             ));
         }
 
-        self.events.extend(events);
+        self.events.extend_from_slice(events);
         Ok(())
     }
 
@@ -197,7 +197,7 @@ mod tests {
         let mut dest = MockDestination::new();
 
         let events = vec![create_test_event(), create_test_event()];
-        dest.write_batch(events).await.unwrap();
+        dest.write_batch(&events).await.unwrap();
 
         assert_eq!(dest.total_events_written(), 2);
         assert_eq!(dest.events().len(), 2);
@@ -229,7 +229,7 @@ mod tests {
     async fn test_mock_destination_empty_batch() {
         let mut dest = MockDestination::new();
 
-        dest.write_batch(vec![]).await.unwrap();
+        dest.write_batch(&[]).await.unwrap();
         assert_eq!(dest.total_events_written(), 0);
     }
 
@@ -238,7 +238,7 @@ mod tests {
         let mut dest = MockDestination::new().with_write_failures();
 
         let events = vec![create_test_event()];
-        let result = dest.write_batch(events).await;
+        let result = dest.write_batch(&events).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -251,7 +251,7 @@ mod tests {
         let mut dest = MockDestination::new().with_capacity_errors();
 
         let events = vec![create_test_event()];
-        let result = dest.write_batch(events).await;
+        let result = dest.write_batch(&events).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -264,7 +264,7 @@ mod tests {
     async fn test_mock_destination_reset() {
         let mut dest = MockDestination::new();
 
-        dest.write_batch(vec![create_test_event()]).await.unwrap();
+        dest.write_batch(&[create_test_event()]).await.unwrap();
         dest.flush().await.unwrap();
         dest.close().await.unwrap();
 

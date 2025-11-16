@@ -24,7 +24,8 @@
 //! - **Events**: [`event`] module defines `MongoDB` change stream events
 //! - **Stream**: [`stream`] module provides `MongoDB` change stream listener with auto-reconnection
 //! - **Destination**: [`destination`] module defines the destination trait for writing events
-//! - **Pipeline**: Core pipeline orchestration (coming soon)
+//! - **State**: [`state`] module provides state storage for resume tokens
+//! - **Pipeline**: [`pipeline`] module provides the core pipeline orchestration
 //! - **Traits**: Source and Transform traits (coming soon)
 //!
 //! # Example
@@ -44,4 +45,6 @@
 
 pub mod destination;
 pub mod event;
+pub mod pipeline;
+pub mod state;
 pub mod stream;
