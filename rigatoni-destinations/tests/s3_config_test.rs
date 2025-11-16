@@ -18,7 +18,7 @@
 
 #![cfg(feature = "s3")]
 
-use rigatoni_destinations::s3::{Compression, S3Config, SerializationFormat};
+use rigatoni_destinations::s3::{Compression, S3Config, S3ConfigError, SerializationFormat};
 
 #[test]
 fn test_config_builder_minimal() {
@@ -67,7 +67,7 @@ fn test_config_builder_missing_bucket() {
     let result = S3Config::builder().region("us-east-1").build();
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("bucket"));
+    assert!(matches!(result.unwrap_err(), S3ConfigError::MissingBucket));
 }
 
 #[test]
@@ -75,7 +75,77 @@ fn test_config_builder_empty_bucket() {
     let result = S3Config::builder().bucket("").region("us-east-1").build();
 
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("empty"));
+    assert!(matches!(result.unwrap_err(), S3ConfigError::EmptyBucket));
+}
+
+#[test]
+fn test_config_builder_invalid_bucket_too_short() {
+    let result = S3Config::builder().bucket("ab").region("us-east-1").build();
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        S3ConfigError::InvalidBucket { name, reason } => {
+            assert_eq!(name, "ab");
+            assert_eq!(reason, "must be 3-63 characters");
+        }
+        _ => panic!("Expected InvalidBucket error"),
+    }
+}
+
+#[test]
+fn test_config_builder_invalid_bucket_uppercase() {
+    let result = S3Config::builder()
+        .bucket("MyBucket")
+        .region("us-east-1")
+        .build();
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        S3ConfigError::InvalidBucket { name, reason } => {
+            assert_eq!(name, "MyBucket");
+            assert_eq!(
+                reason,
+                "must contain only lowercase letters, numbers, hyphens, and periods"
+            );
+        }
+        _ => panic!("Expected InvalidBucket error"),
+    }
+}
+
+#[test]
+fn test_config_builder_invalid_prefix_path_traversal() {
+    let result = S3Config::builder()
+        .bucket("test-bucket")
+        .region("us-east-1")
+        .prefix("data/../secrets")
+        .build();
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        S3ConfigError::InvalidPrefix { prefix, reason } => {
+            assert_eq!(prefix, "data/../secrets");
+            assert_eq!(reason, "prefix cannot contain '..' (path traversal)");
+        }
+        _ => panic!("Expected InvalidPrefix error"),
+    }
+}
+
+#[test]
+fn test_config_builder_invalid_prefix_leading_slash() {
+    let result = S3Config::builder()
+        .bucket("test-bucket")
+        .region("us-east-1")
+        .prefix("/absolute/path")
+        .build();
+
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        S3ConfigError::InvalidPrefix { prefix, reason } => {
+            assert_eq!(prefix, "/absolute/path");
+            assert_eq!(reason, "prefix cannot start with '/'");
+        }
+        _ => panic!("Expected InvalidPrefix error"),
+    }
 }
 
 #[test]

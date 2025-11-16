@@ -25,6 +25,44 @@
 
 use crate::s3::key_gen::KeyGenerationStrategy;
 
+/// Errors that can occur during S3 configuration.
+#[derive(Debug, thiserror::Error)]
+pub enum S3ConfigError {
+    /// Bucket name is required.
+    #[error("bucket is required")]
+    MissingBucket,
+
+    /// Bucket name is empty.
+    #[error("bucket cannot be empty")]
+    EmptyBucket,
+
+    /// Bucket name is invalid.
+    #[error("invalid bucket name: {name} ({reason})")]
+    InvalidBucket {
+        /// The invalid bucket name
+        name: String,
+        /// Reason why it's invalid
+        reason: &'static str,
+    },
+
+    /// Region is required.
+    #[error("region is required")]
+    MissingRegion,
+
+    /// Region is empty.
+    #[error("region cannot be empty")]
+    EmptyRegion,
+
+    /// Invalid prefix (contains invalid characters).
+    #[error("invalid prefix: {prefix} ({reason})")]
+    InvalidPrefix {
+        /// The invalid prefix
+        prefix: String,
+        /// Reason why it's invalid
+        reason: &'static str,
+    },
+}
+
 /// Serialization format for S3 objects.
 ///
 /// Different formats have different trade-offs:
@@ -353,7 +391,11 @@ impl S3ConfigBuilder {
     ///
     /// Returns an error if required fields are missing or invalid:
     /// - `bucket` is required and must not be empty
+    /// - `bucket` must be 3-63 characters long
+    /// - `bucket` must contain only lowercase letters, numbers, hyphens, and periods
     /// - `region` is required and must not be empty
+    /// - `prefix` cannot contain `..` (path traversal)
+    /// - `prefix` cannot start with `/`
     ///
     /// # Examples
     ///
@@ -363,15 +405,52 @@ impl S3ConfigBuilder {
     ///     .region("us-east-1")
     ///     .build()?;
     /// ```
-    pub fn build(self) -> Result<S3Config, String> {
-        let bucket = self.bucket.ok_or("bucket is required")?;
+    pub fn build(self) -> Result<S3Config, S3ConfigError> {
+        let bucket = self.bucket.ok_or(S3ConfigError::MissingBucket)?;
+
         if bucket.is_empty() {
-            return Err("bucket cannot be empty".to_string());
+            return Err(S3ConfigError::EmptyBucket);
         }
 
-        let region = self.region.ok_or("region is required")?;
+        // Validate bucket name (RFC 1035-like: 3-63 chars, lowercase, no underscores)
+        if bucket.len() < 3 || bucket.len() > 63 {
+            return Err(S3ConfigError::InvalidBucket {
+                name: bucket,
+                reason: "must be 3-63 characters",
+            });
+        }
+
+        if !bucket
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.')
+        {
+            return Err(S3ConfigError::InvalidBucket {
+                name: bucket,
+                reason: "must contain only lowercase letters, numbers, hyphens, and periods",
+            });
+        }
+
+        let region = self.region.ok_or(S3ConfigError::MissingRegion)?;
+
         if region.is_empty() {
-            return Err("region cannot be empty".to_string());
+            return Err(S3ConfigError::EmptyRegion);
+        }
+
+        // Validate prefix if provided
+        if let Some(ref prefix) = self.prefix {
+            if prefix.contains("..") {
+                return Err(S3ConfigError::InvalidPrefix {
+                    prefix: prefix.clone(),
+                    reason: "prefix cannot contain '..' (path traversal)",
+                });
+            }
+
+            if prefix.starts_with('/') {
+                return Err(S3ConfigError::InvalidPrefix {
+                    prefix: prefix.clone(),
+                    reason: "prefix cannot start with '/'",
+                });
+            }
         }
 
         Ok(S3Config {

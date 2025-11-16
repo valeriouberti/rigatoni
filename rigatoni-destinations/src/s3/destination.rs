@@ -384,13 +384,13 @@ impl S3Destination {
     }
 
     /// Compresses data based on the configured compression algorithm.
-    fn compress(&self, data: Vec<u8>) -> Result<Vec<u8>, DestinationError> {
+    fn compress(&self, data: &[u8]) -> Result<Vec<u8>, DestinationError> {
         match self.config.compression {
-            Compression::None => Ok(data),
+            Compression::None => Ok(data.to_vec()),
             #[cfg(feature = "gzip")]
-            Compression::Gzip => Self::compress_gzip(&data),
+            Compression::Gzip => Self::compress_gzip(data),
             #[cfg(feature = "zstandard")]
-            Compression::Zstd => Self::compress_zstd(&data),
+            Compression::Zstd => Self::compress_zstd(data),
         }
     }
 
@@ -468,7 +468,7 @@ impl S3Destination {
             let uncompressed_size = serialized.len();
 
             // Compress if configured
-            let data = self.compress(serialized)?;
+            let data = self.compress(&serialized)?;
             let compressed_size = data.len();
 
             // Generate S3 key

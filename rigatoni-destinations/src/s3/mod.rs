@@ -88,6 +88,6 @@ pub mod config;
 mod destination;
 pub mod key_gen;
 
-pub use config::{Compression, S3Config, S3ConfigBuilder, SerializationFormat};
+pub use config::{Compression, S3Config, S3ConfigBuilder, S3ConfigError, SerializationFormat};
 pub use destination::S3Destination;
 pub use key_gen::KeyGenerationStrategy;
