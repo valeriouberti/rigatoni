@@ -53,7 +53,8 @@ gcp-bigquery-client = "0.27"
 rdkafka = { version = "0.38", features = ["tokio"] }
 
 # Redis for distributed state management
-redis = { version = "0.32", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+deadpool-redis = "0.18"
 
 # Time handling for timestamps and scheduling
 chrono = { version = "0.4", features = ["serde"] }
