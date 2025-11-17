@@ -1,12 +1,42 @@
+# Rigatoni CI/CD Pipeline
+#
+# This workflow handles three main scenarios:
+#
+# 1. PULL REQUESTS to main:
+#    - Runs all quality checks (tests, linting, formatting, security)
+#    - Blocks merge until all checks pass (via "CI Success" status check)
+#    - Configure branch protection: Settings → Branches → main → Require status checks
+#      → Select "CI Success" as required
+#
+# 2. PUSHES to main:
+#    - Runs all quality checks on the main branch
+#    - Ensures main branch stays green
+#    - Does NOT publish to crates.io
+#
+# 3. VERSION TAGS (v*.*.*, e.g., v0.1.0):
+#    - Runs all quality checks on the tagged commit
+#    - Publishes all crates to crates.io (rigatoni-core → rigatoni-destinations → rigatoni-stores)
+#    - Creates a GitHub Release with automated notes
+#    - Only runs if all CI checks pass
+#
+# To configure branch protection (blocking merges until CI passes):
+# 1. Go to: Repository Settings → Branches
+# 2. Add rule for "main" branch
+# 3. Enable "Require status checks to pass before merging"
+# 4. Select "CI Success" as a required status check
+# 5. Enable "Require branches to be up to date before merging" (recommended)
+
 name: CI
 
 on:
+  # Run on pushes to main branch
   push:
-    branches: [main, develop]
+    branches: [main]
     tags:
       - "v*.*.*" # Trigger on version tags (e.g., v0.1.0)
+  # Run on pull requests targeting main
   pull_request:
-    branches: [main, develop]
+    branches: [main]
   # Allow manual triggering from the Actions tab
   workflow_dispatch:
 
@@ -211,6 +241,7 @@ jobs:
   # Summary job that depends on all checks
   # This provides a single status check for branch protection rules
   # Configure GitHub branch protection to require "CI Success" status check
+  # This will block PRs from merging until all checks pass
   ci-success:
     name: CI Success
     needs: [test, clippy, fmt, cargo-check, docs, audit, deny]
@@ -231,54 +262,34 @@ jobs:
           echo "======================"
 
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
-            echo "❌ One or more CI jobs failed - blocking merge"
-            echo "Please fix the failing checks before merging"
+            echo "❌ One or more CI jobs failed"
+            echo ""
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              echo "🚫 MERGE BLOCKED: Please fix the failing checks before merging"
+            else
+              echo "⚠️ BUILD FAILED: Please review the errors above"
+            fi
             exit 1
           fi
           if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "⚠️ One or more CI jobs were cancelled - blocking merge"
-            echo "Please re-run the cancelled jobs"
-            exit 1
-          fi
-          if [[ "${{ contains(needs.*.result, 'skipped') }}" == "true" ]]; then
-            echo "⚠️ One or more CI jobs were skipped - blocking merge"
-            echo "Please ensure all jobs complete successfully"
+            echo "⚠️ One or more CI jobs were cancelled"
+            echo "Please re-run the workflow"
             exit 1
           fi
 
-          echo "✅ All CI jobs succeeded - ready to merge!"
-
-  # Branch protection enforcement helper
-  # This job will always run and provides clear status for PRs
-  merge-gate:
-    name: Merge Gate
-    needs: ci-success
-    runs-on: ubuntu-latest
-    if: always()
-
-    steps:
-      - name: Enforce merge requirements
-        run: |
-          if [[ "${{ needs.ci-success.result }}" != "success" ]]; then
-            echo "🚫 MERGE BLOCKED: CI checks did not pass"
-            echo "Status: ${{ needs.ci-success.result }}"
-            echo ""
-            echo "To enable merging:"
-            echo "1. Fix any failing CI checks"
-            echo "2. Ensure all jobs complete successfully"
-            echo "3. Wait for this status check to pass"
-            exit 1
+          echo "✅ All CI jobs succeeded!"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "🎉 Ready to merge!"
           fi
 
-          echo "🎉 MERGE APPROVED: All CI checks passed"
-          echo "This pull request is ready to merge"
-
-  # Release to crates.io - only runs on version tags (not on PRs or regular commits)
+  # Release to crates.io
+  # This job only runs when a version tag (v*.*.*) is pushed
+  # It will NOT run on pull requests or regular pushes to main
+  # All CI checks must pass before this job runs
   release:
     name: Publish to crates.io
     needs: [ci-success]
     runs-on: ubuntu-latest
-    # Only run on version tags (e.g., v0.1.0), not on PRs or regular pushes
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
 
     steps:
