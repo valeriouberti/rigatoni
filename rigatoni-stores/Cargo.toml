@@ -17,7 +17,7 @@ categories.workspace = true
 
 [dependencies]
 # Core crate dependency
-rigatoni-core = { path = "../rigatoni-core" }
+rigatoni-core = { version = "0.1", path = "../rigatoni-core" }
 
 # Async runtime
 tokio = { workspace = true }
