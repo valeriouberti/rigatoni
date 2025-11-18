@@ -20,8 +20,80 @@ use mongodb::bson::doc;
 use rigatoni_core::state::StateStore;
 use rigatoni_stores::redis::{RedisConfig, RedisStore};
 use std::time::Duration;
-use testcontainers::{runners::AsyncRunner, ImageExt};
+use testcontainers::runners::AsyncRunner;
 use testcontainers_modules::redis::Redis;
+
+// ============================================================================
+// Unit Tests
+// ============================================================================
+
+#[test]
+fn test_config_builder() {
+    let config = RedisConfig::builder()
+        .url("redis://localhost:6379")
+        .pool_size(20)
+        .ttl(Duration::from_secs(3600))
+        .cluster_mode(true)
+        .build()
+        .unwrap();
+
+    assert_eq!(config.url, "redis://localhost:6379");
+    assert_eq!(config.pool_size, 20);
+    assert_eq!(config.ttl, Some(Duration::from_secs(3600)));
+    assert!(config.cluster_mode);
+}
+
+#[test]
+fn test_config_builder_defaults() {
+    let config = RedisConfig::builder()
+        .url("redis://localhost:6379")
+        .build()
+        .unwrap();
+
+    assert_eq!(config.url, "redis://localhost:6379");
+    assert_eq!(config.pool_size, 10); // default
+    assert_eq!(config.ttl, None); // default
+    assert!(!config.cluster_mode); // default
+}
+
+#[test]
+fn test_config_builder_missing_url() {
+    let result = RedisConfig::builder().pool_size(10).build();
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_config_builder_zero_pool_size() {
+    let result = RedisConfig::builder()
+        .url("redis://localhost:6379")
+        .pool_size(0)
+        .build();
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_config_builder_with_all_options() {
+    let config = RedisConfig::builder()
+        .url("redis://localhost:6379")
+        .pool_size(15)
+        .ttl(Duration::from_secs(7200))
+        .cluster_mode(true)
+        .connection_timeout(Duration::from_secs(10))
+        .max_retries(5)
+        .build()
+        .unwrap();
+
+    assert_eq!(config.url, "redis://localhost:6379");
+    assert_eq!(config.pool_size, 15);
+    assert_eq!(config.ttl, Some(Duration::from_secs(7200)));
+    assert!(config.cluster_mode);
+    assert_eq!(config.connection_timeout, Duration::from_secs(10));
+    assert_eq!(config.max_retries, 5);
+}
+
+// ============================================================================
+// Integration Tests (require Docker)
+// ============================================================================
 
 /// Helper to create a Redis store connected to a test container.
 async fn create_test_store(url: String) -> RedisStore {
@@ -56,7 +128,7 @@ async fn test_redis_save_and_get_resume_token() {
     // Create test token
     let token = doc! {
         "_data": "test_token_123",
-        "clusterTime": 1234567890_i64,
+        "clusterTime": 1_234_567_890_i64,
     };
 
     // Save token

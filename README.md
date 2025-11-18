@@ -18,6 +18,7 @@ Rigatoni is a modern ETL framework built for speed, reliability, and developer e
 
 - **MongoDB Change Streams** - Real-time CDC (Change Data Capture) from MongoDB
 - **S3 Destination** - Export to AWS S3 with multiple formats (JSON, CSV, Parquet, Avro)
+- **Redis State Store** - Distributed state management for multi-instance deployments
 - **Pipeline Orchestration** - Multi-worker architecture with retry logic and state management
 - **Async-first design** - Powered by Tokio for high throughput
 - **Type-safe transformations** - Compile-time guarantees with Rust's type system
@@ -29,6 +30,7 @@ Rigatoni is a modern ETL framework built for speed, reliability, and developer e
 - 🔒 **Type Safety**: Leverage Rust's type system for data transformation guarantees
 - 📊 **MongoDB CDC**: Real-time change stream listening with resume token support
 - 📦 **S3 Integration**: Multiple formats (JSON, CSV, Parquet, Avro) with compression (gzip, zstd)
+- 🗄️ **Distributed State**: Redis-backed state store for multi-instance deployments
 - 🔄 **Retry Logic**: Exponential backoff with configurable limits
 - 🎯 **Batching**: Automatic batching based on size and time windows
 - 🎨 **Composable Pipelines**: Build ETL workflows from simple, testable components
@@ -48,10 +50,10 @@ rigatoni/
 
 ### Core Concepts
 
-- **Source**: Extract data from systems
+- **Source**: Extract data from systems (MongoDB change streams)
 - **Transform**: Process and enrich data with type-safe transformations
-- **Destination**: Load data into target systems (currently S3)
-- **Store**: Manage pipeline state for reliability
+- **Destination**: Load data into target systems (S3 with multiple formats)
+- **Store**: Manage pipeline state for reliability (in-memory, file, Redis)
 - **Pipeline**: Orchestrate the entire ETL workflow with error handling
 
 ## 🚀 Quick Start
@@ -68,7 +70,8 @@ Add Rigatoni to your `Cargo.toml`:
 ```toml
 [dependencies]
 rigatoni-core = "0.1"
-rigatoni-destinations = "0.1"
+rigatoni-destinations = { version = "0.1", features = ["s3"] }
+rigatoni-stores = { version = "0.1", features = ["redis-store"] }
 ```
 
 ### Basic Example: MongoDB to S3 Pipeline
@@ -104,7 +107,51 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-See [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) for detailed tutorials.
+### Distributed State with Redis
+
+For multi-instance deployments, use Redis to share state across pipeline instances:
+
+```rust
+use rigatoni_core::pipeline::{Pipeline, PipelineConfig};
+use rigatoni_destinations::s3::{S3Config, S3Destination};
+use rigatoni_stores::redis::{RedisStore, RedisConfig};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Configure Redis state store
+    let redis_config = RedisConfig::builder()
+        .url("redis://localhost:6379")
+        .pool_size(10)
+        .ttl(Duration::from_secs(7 * 24 * 60 * 60))  // 7 days
+        .build()?;
+
+    let store = RedisStore::new(redis_config).await?;
+
+    // Configure S3 destination
+    let s3_config = S3Config::builder()
+        .bucket("my-data-lake")
+        .region("us-east-1")
+        .build()?;
+
+    let destination = S3Destination::new(s3_config).await?;
+
+    // Configure pipeline with Redis store
+    let config = PipelineConfig::builder()
+        .mongodb_uri("mongodb://localhost:27017")
+        .database("mydb")
+        .collections(vec!["users", "orders"])
+        .build()?;
+
+    // Run pipeline with distributed state
+    let mut pipeline = Pipeline::with_store(config, destination, store).await?;
+    pipeline.run().await?;
+
+    Ok(())
+}
+```
+
+See [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) for detailed tutorials and [Redis Configuration Guide](https://valeriouberti.github.io/rigatoni/guides/redis-configuration) for production deployment.
 
 ## 📚 Documentation
 

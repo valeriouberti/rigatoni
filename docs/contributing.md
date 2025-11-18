@@ -7,16 +7,18 @@ permalink: /contributing
 ---
 
 # Contributing to Rigatoni
+
 {: .no_toc }
 
 Thank you for your interest in contributing to Rigatoni!
 {: .fs-6 .fw-300 }
 
 ## Table of contents
+
 {: .no_toc .text-delta }
 
 1. TOC
-{:toc}
+   {:toc}
 
 ---
 
@@ -64,6 +66,7 @@ git checkout -b fix/your-bug-fix
 ```
 
 **Branch Naming:**
+
 - `feature/` - New features
 - `fix/` - Bug fixes
 - `docs/` - Documentation changes
@@ -100,6 +103,7 @@ We provide a pre-push script that runs all CI checks:
 ```
 
 This runs:
+
 - Formatting checks
 - Clippy linting
 - Tests (default, all features, no features)
@@ -128,6 +132,7 @@ git commit -m "docs: update getting started guide"
 ```
 
 **Types:**
+
 - `feat` - New feature
 - `fix` - Bug fix
 - `docs` - Documentation only
@@ -164,20 +169,25 @@ Provide a clear description:
 
 ```markdown
 ## Summary
+
 Brief description of what this PR does.
 
 ## Changes
+
 - List of specific changes
 - Another change
 - Yet another change
 
 ## Testing
+
 How you tested the changes:
+
 - [ ] Unit tests added/updated
 - [ ] Integration tests passing
 - [ ] Manually tested with [describe scenario]
 
 ## Related Issues
+
 Closes #123
 Relates to #456
 ```
@@ -230,7 +240,7 @@ cargo clippy --workspace --all-features -- \
 
 Document all public APIs:
 
-```rust
+````rust
 /// Writes a batch of events to the destination.
 ///
 /// # Arguments
@@ -251,7 +261,7 @@ Document all public APIs:
 /// ```
 #[async_trait]
 async fn write_batch(&mut self, events: &[ChangeEvent]) -> Result<(), DestinationError>;
-```
+````
 
 ### Error Handling
 
@@ -320,12 +330,6 @@ All files must include the Apache-2.0 license header:
 // limitations under the License.
 //
 // SPDX-License-Identifier: Apache-2.0
-```
-
-Use the provided script:
-
-```bash
-cargo run --manifest-path tools/license-header/Cargo.toml
 ```
 
 ---

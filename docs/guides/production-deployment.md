@@ -588,11 +588,28 @@ S3Config::builder()
 Use Redis for distributed state:
 
 ```rust
-use rigatoni_stores::redis::RedisStore;
+use rigatoni_stores::redis::{RedisStore, RedisConfig};
+use std::time::Duration;
 
-let store = RedisStore::new("redis://localhost:6379").await?;
+// Configure Redis with connection pooling and TTL
+let redis_config = RedisConfig::builder()
+    .url("redis://localhost:6379")
+    .pool_size(10)
+    .ttl(Duration::from_secs(14 * 24 * 60 * 60))  // 14 days
+    .max_retries(3)
+    .build()?;
+
+let store = RedisStore::new(redis_config).await?;
 let pipeline = Pipeline::with_store(config, destination, store).await?;
 ```
+
+**Redis Configuration for Production:**
+
+- Use **TLS** for encryption: `rediss://` scheme
+- Set **TTL** to prevent unbounded growth (7-30 days recommended)
+- Configure **pool size** based on concurrent pipelines (2× pipeline count)
+- Enable **Redis AUTH** for authentication
+- Use **Redis Sentinel** for high availability
 
 ### 2. Backup Resume Tokens
 

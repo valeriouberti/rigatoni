@@ -16,7 +16,7 @@
 
 //! Redis-backed state store for distributed deployments.
 //!
-//! This module provides a Redis implementation of the [`StateStore`](rigatoni_core::state::StateStore)
+//! This module provides a Redis implementation of the [`StateStore`]
 //! trait, enabling distributed state management across multiple Rigatoni pipeline instances.
 //!
 //! # Features
@@ -76,23 +76,13 @@
 //! # }
 //! ```
 //!
-//! # Example: Redis Cluster
+//! # Redis Cluster Support
 //!
-//! ```rust,no_run
-//! use rigatoni_stores::redis::{RedisStore, RedisConfig};
+//! **Note**: Redis Cluster mode is currently **not implemented**. The `cluster_mode`
+//! flag exists for future compatibility but does not enable cluster functionality.
+//! For now, use Redis Sentinel for high availability or connect to a single Redis instance.
 //!
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! // Connect to Redis Cluster
-//! let config = RedisConfig::builder()
-//!     .url("redis://node1:6379,redis://node2:6379,redis://node3:6379")
-//!     .cluster_mode(true)
-//!     .pool_size(20)
-//!     .build()?;
-//!
-//! let store = RedisStore::new(config).await?;
-//! # Ok(())
-//! # }
-//! ```
+//! See GitHub issue for cluster support implementation status.
 //!
 //! # Production Deployment
 //!
@@ -148,12 +138,16 @@ const BASE_RETRY_DELAY_MS: u64 = 100;
 ///     .build()
 ///     .expect("valid config");
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RedisConfig {
-    /// Redis connection URL (e.g., "redis://localhost:6379")
+    /// Redis connection URL (e.g., `redis://localhost:6379`)
     ///
-    /// For cluster mode, provide comma-separated URLs:
-    /// "redis://node1:6379,redis://node2:6379"
+    /// Supported schemes:
+    /// - `redis://` - Unencrypted connection
+    /// - `rediss://` - TLS-encrypted connection
+    ///
+    /// Note: Comma-separated URLs are not currently supported.
+    /// For high availability, use Redis Sentinel URLs instead.
     pub url: String,
 
     /// Connection pool size (default: 10)
@@ -170,7 +164,11 @@ pub struct RedisConfig {
 
     /// Enable Redis Cluster mode (default: false)
     ///
-    /// When true, the client will handle MOVED/ASK redirections automatically.
+    /// **WARNING**: Redis Cluster mode is not currently implemented.
+    /// This flag is reserved for future use. Setting it to `true` will
+    /// log a warning but will not enable cluster functionality.
+    ///
+    /// For high availability, use Redis Sentinel instead.
     pub cluster_mode: bool,
 
     /// Connection timeout (default: 5 seconds)
@@ -193,11 +191,65 @@ impl Default for RedisConfig {
     }
 }
 
+impl std::fmt::Debug for RedisConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Mask credentials in URL for security
+        let masked_url = Self::mask_credentials(&self.url);
+
+        f.debug_struct("RedisConfig")
+            .field("url", &masked_url)
+            .field("pool_size", &self.pool_size)
+            .field("ttl", &self.ttl)
+            .field("cluster_mode", &self.cluster_mode)
+            .field("connection_timeout", &self.connection_timeout)
+            .field("max_retries", &self.max_retries)
+            .finish()
+    }
+}
+
 impl RedisConfig {
     /// Creates a new builder for `RedisConfig`.
     #[must_use]
     pub fn builder() -> RedisConfigBuilder {
         RedisConfigBuilder::new()
+    }
+
+    /// Masks credentials in a Redis URL for safe logging.
+    ///
+    /// # Example
+    /// ```text
+    /// Input:  "redis://:password@localhost:6379"
+    /// Output: "redis://***:***@localhost:6379"
+    /// ```
+    fn mask_credentials(url: &str) -> String {
+        // Parse URL to identify and mask credentials
+        if let Ok(parsed) = url::Url::parse(url) {
+            let mut masked = parsed.clone();
+
+            // Mask username if present
+            if !parsed.username().is_empty() {
+                let _ = masked.set_username("***");
+            }
+
+            // Mask password if present
+            if parsed.password().is_some() {
+                let _ = masked.set_password(Some("***"));
+            }
+
+            masked.to_string()
+        } else {
+            // If URL parsing fails, just show the scheme and host if possible
+            if url.contains("://") {
+                let parts: Vec<&str> = url.split("://").collect();
+                if parts.len() == 2 {
+                    format!("{}://***.***", parts[0])
+                } else {
+                    "***.***".to_string()
+                }
+            } else {
+                "***.***".to_string()
+            }
+        }
     }
 }
 
@@ -242,7 +294,9 @@ impl RedisConfigBuilder {
     /// - With auth: `redis://:password@localhost:6379`
     /// - With database: `redis://localhost:6379/0`
     /// - TLS: `rediss://localhost:6380`
-    /// - Cluster: `redis://node1:6379,redis://node2:6379`
+    /// - Sentinel: `redis://sentinel1:26379,sentinel2:26379`
+    ///
+    /// **Note**: Redis Cluster mode (comma-separated node URLs) is not currently supported.
     #[must_use]
     pub fn url(mut self, url: impl Into<String>) -> Self {
         self.url = Some(url.into());
@@ -276,9 +330,19 @@ impl RedisConfigBuilder {
 
     /// Enables Redis Cluster mode.
     ///
+    /// **WARNING**: Redis Cluster mode is not currently implemented.
+    /// This flag is reserved for future use and will log a warning if set to `true`.
+    ///
     /// Default: false (standalone mode)
     #[must_use]
     pub fn cluster_mode(mut self, enabled: bool) -> Self {
+        if enabled {
+            warn!(
+                "Redis Cluster mode is not implemented yet. \
+                 This flag will be ignored and the connection will use standalone mode. \
+                 Use Redis Sentinel for high availability."
+            );
+        }
         self.cluster_mode = Some(enabled);
         self
     }
@@ -412,13 +476,13 @@ impl RedisStore {
             .create_pool(Some(Runtime::Tokio1))
             .map_err(|e| {
                 error!("Failed to create Redis connection pool: {}", e);
-                StateStoreError::Connection(format!("Failed to create pool: {}", e))
+                StateStoreError::Connection(format!("Failed to create pool: {e}"))
             })?;
 
         // Test connection
         let mut conn = pool.get().await.map_err(|e| {
             error!("Failed to get connection from pool: {}", e);
-            StateStoreError::Connection(format!("Failed to connect to Redis: {}", e))
+            StateStoreError::Connection(format!("Failed to connect to Redis: {e}"))
         })?;
 
         // Ping to verify connectivity
@@ -427,7 +491,7 @@ impl RedisStore {
             .await
             .map_err(|e| {
                 error!("Redis PING failed: {}", e);
-                StateStoreError::Connection(format!("Redis connection test failed: {}", e))
+                StateStoreError::Connection(format!("Redis connection test failed: {e}"))
             })?;
 
         debug!("Redis state store initialized successfully");
@@ -437,7 +501,7 @@ impl RedisStore {
 
     /// Generates the Redis key for a given collection.
     fn make_key(collection: &str) -> String {
-        format!("{}:{}", KEY_PREFIX, collection)
+        format!("{KEY_PREFIX}:{collection}")
     }
 
     /// Executes a Redis operation with retry logic for transient errors.
@@ -462,8 +526,7 @@ impl RedisStore {
                 Err(e) => {
                     error!("Redis operation failed after {} retries: {}", retries, e);
                     return Err(StateStoreError::Connection(format!(
-                        "Redis operation failed: {}",
-                        e
+                        "Redis operation failed: {e}"
                     )));
                 }
             }
@@ -481,14 +544,14 @@ impl RedisStore {
     /// Serializes a BSON document to bytes for storage in Redis.
     fn serialize_token(token: &Document) -> Result<Vec<u8>, StateStoreError> {
         bson::to_vec(token).map_err(|e| {
-            StateStoreError::Serialization(format!("Failed to serialize resume token: {}", e))
+            StateStoreError::Serialization(format!("Failed to serialize resume token: {e}"))
         })
     }
 
     /// Deserializes bytes from Redis back to a BSON document.
     fn deserialize_token(bytes: &[u8]) -> Result<Document, StateStoreError> {
         bson::from_slice(bytes).map_err(|e| {
-            StateStoreError::Serialization(format!("Failed to deserialize resume token: {}", e))
+            StateStoreError::Serialization(format!("Failed to deserialize resume token: {e}"))
         })
     }
 }
@@ -523,7 +586,7 @@ impl StateStore for RedisStore {
             // Use SET with optional EX (expiration in seconds)
             if let Some(ttl_duration) = ttl {
                 let ttl_secs = ttl_duration.as_secs();
-                conn.set_ex(&key, &value, ttl_secs as u64).await
+                conn.set_ex(&key, &value, ttl_secs).await
             } else {
                 conn.set(&key, &value).await
             }
@@ -564,19 +627,16 @@ impl StateStore for RedisStore {
             })
             .await?;
 
-        match bytes {
-            Some(data) => {
-                let token = Self::deserialize_token(&data)?;
-                debug!(
-                    "Successfully retrieved resume token for collection '{}'",
-                    collection
-                );
-                Ok(Some(token))
-            }
-            None => {
-                debug!("No resume token found for collection '{}'", collection);
-                Ok(None)
-            }
+        if let Some(data) = bytes {
+            let token = Self::deserialize_token(&data)?;
+            debug!(
+                "Successfully retrieved resume token for collection '{}'",
+                collection
+            );
+            Ok(Some(token))
+        } else {
+            debug!("No resume token found for collection '{}'", collection);
+            Ok(None)
         }
     }
 
@@ -611,61 +671,76 @@ impl StateStore for RedisStore {
     }
 
     async fn list_resume_tokens(&self) -> Result<HashMap<String, Document>, StateStoreError> {
-        let pattern = format!("{}:*", KEY_PREFIX);
+        let pattern = format!("{KEY_PREFIX}:*");
 
         debug!("Listing all resume tokens with pattern '{}'", pattern);
 
         let pool = self.pool.clone();
-
-        // Get all keys matching the pattern
-        let keys: Vec<String> = self
-            .with_retry(|| async {
-                let mut conn = pool.get().await.map_err(|e| {
-                    RedisError::from((
-                        redis::ErrorKind::IoError,
-                        "Failed to get connection from pool",
-                        e.to_string(),
-                    ))
-                })?;
-
-                redis::cmd("KEYS").arg(&pattern).query_async(&mut *conn).await
-            })
-            .await?;
-
-        if keys.is_empty() {
-            debug!("No resume tokens found");
-            return Ok(HashMap::new());
-        }
-
-        let pool = self.pool.clone();
         let prefix_len = KEY_PREFIX.len() + 1; // +1 for the colon
-
-        // Fetch all values
-        let values: Vec<Option<Vec<u8>>> = self
-            .with_retry(|| async {
-                let mut conn = pool.get().await.map_err(|e| {
-                    RedisError::from((
-                        redis::ErrorKind::IoError,
-                        "Failed to get connection from pool",
-                        e.to_string(),
-                    ))
-                })?;
-
-                // Use MGET for atomic retrieval of all values
-                redis::cmd("MGET")
-                    .arg(&keys)
-                    .query_async(&mut *conn)
-                    .await
-            })
-            .await?;
-
-        // Build the result map
         let mut result = HashMap::new();
-        for (key, value) in keys.into_iter().zip(values) {
-            if let Some(bytes) = value {
-                let collection = key[prefix_len..].to_string();
-                let token = Self::deserialize_token(&bytes)?;
-                result.insert(collection, token);
+
+        // Use SCAN instead of KEYS to avoid blocking Redis
+        let mut cursor: u64 = 0;
+        loop {
+            let pool_clone = pool.clone();
+
+            let (next_cursor, batch_keys): (u64, Vec<String>) = self
+                .with_retry(|| async {
+                    let mut conn = pool_clone.get().await.map_err(|e| {
+                        RedisError::from((
+                            redis::ErrorKind::IoError,
+                            "Failed to get connection from pool",
+                            e.to_string(),
+                        ))
+                    })?;
+
+                    // SCAN with pattern matching and COUNT hint
+                    redis::cmd("SCAN")
+                        .arg(cursor)
+                        .arg("MATCH")
+                        .arg(&pattern)
+                        .arg("COUNT")
+                        .arg(100) // Scan 100 keys per iteration
+                        .query_async(&mut *conn)
+                        .await
+                })
+                .await?;
+
+            // Fetch values for this batch if any keys found
+            if !batch_keys.is_empty() {
+                let pool_clone = pool.clone();
+                let values: Vec<Option<Vec<u8>>> = self
+                    .with_retry(|| async {
+                        let mut conn = pool_clone.get().await.map_err(|e| {
+                            RedisError::from((
+                                redis::ErrorKind::IoError,
+                                "Failed to get connection from pool",
+                                e.to_string(),
+                            ))
+                        })?;
+
+                        // Use MGET for batched retrieval
+                        redis::cmd("MGET")
+                            .arg(&batch_keys)
+                            .query_async(&mut *conn)
+                            .await
+                    })
+                    .await?;
+
+                // Add to result map
+                for (key, value) in batch_keys.into_iter().zip(values) {
+                    if let Some(bytes) = value {
+                        let collection = key[prefix_len..].to_string();
+                        let token = Self::deserialize_token(&bytes)?;
+                        result.insert(collection, token);
+                    }
+                }
+            }
+
+            // Check if we've scanned all keys
+            cursor = next_cursor;
+            if cursor == 0 {
+                break;
             }
         }
 
@@ -679,65 +754,5 @@ impl StateStore for RedisStore {
         // No explicit close needed for deadpool-redis
         debug!("Redis state store closed");
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_make_key() {
-        assert_eq!(RedisStore::make_key("users"), "rigatoni:resume_token:users");
-        assert_eq!(
-            RedisStore::make_key("orders"),
-            "rigatoni:resume_token:orders"
-        );
-    }
-
-    #[test]
-    fn test_config_builder() {
-        let config = RedisConfig::builder()
-            .url("redis://localhost:6379")
-            .pool_size(20)
-            .ttl(Duration::from_secs(3600))
-            .cluster_mode(true)
-            .build()
-            .unwrap();
-
-        assert_eq!(config.url, "redis://localhost:6379");
-        assert_eq!(config.pool_size, 20);
-        assert_eq!(config.ttl, Some(Duration::from_secs(3600)));
-        assert!(config.cluster_mode);
-    }
-
-    #[test]
-    fn test_config_builder_missing_url() {
-        let result = RedisConfig::builder().pool_size(10).build();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_config_builder_zero_pool_size() {
-        let result = RedisConfig::builder()
-            .url("redis://localhost:6379")
-            .pool_size(0)
-            .build();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_serialize_deserialize_token() {
-        use mongodb::bson::doc;
-
-        let token = doc! {
-            "_data": "test_token",
-            "clusterTime": 123456789_i64,
-        };
-
-        let serialized = RedisStore::serialize_token(&token).unwrap();
-        let deserialized = RedisStore::deserialize_token(&serialized).unwrap();
-
-        assert_eq!(token, deserialized);
     }
 }

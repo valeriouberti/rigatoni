@@ -23,6 +23,11 @@ Task-specific guides for common Rigatoni use cases.
 - **[Formats and Compression](formats-compression)** - Choosing the right format and compression
 - **[Partitioning Strategies](partitioning)** - Optimize for analytics workloads
 
+### State Stores
+
+- **[Redis Configuration](redis-configuration)** - Complete guide to Redis state store configuration
+- **[State Store Comparison](state-stores)** - Choosing the right state store for your deployment
+
 ### Pipeline Configuration
 
 - **[Batching and Performance](batching-performance)** - Tuning for throughput and latency

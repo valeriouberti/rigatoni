@@ -18,7 +18,7 @@
 //!
 //! This crate provides various backend implementations of the
 //! [`StateStore`](rigatoni_core::state::StateStore) trait for persisting
-//! MongoDB change stream resume tokens.
+//! `MongoDB` change stream resume tokens.
 //!
 //! # Available Stores
 //!
