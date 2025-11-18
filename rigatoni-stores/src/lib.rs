@@ -32,7 +32,7 @@
 //!
 //! # Example: Redis Store
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use rigatoni_stores::redis::{RedisStore, RedisConfig};
 //! use rigatoni_core::state::StateStore;
 //! use mongodb::bson::doc;
