@@ -30,6 +30,6 @@ Thumbs.db
 # Examples, docs, and tools (from your original)
 /examples/
 internal-docs/
-tools/
+tools
 HEADER
 .claude/

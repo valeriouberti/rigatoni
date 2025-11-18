@@ -27,6 +27,7 @@ futures = { workspace = true }
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+bson = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
@@ -35,6 +36,9 @@ anyhow = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
+# URL parsing (for credential masking in Redis URLs)
+url = "2.5"
+
 # Concurrency primitives
 parking_lot = { workspace = true }
 dashmap = { workspace = true, optional = true }
@@ -42,14 +46,25 @@ dashmap = { workspace = true, optional = true }
 # Time handling
 chrono = { workspace = true }
 
-# Redis for distributed state (optional, enabled by redis feature)
+# Redis for distributed state (optional, enabled by redis-store feature)
 [dependencies.redis]
 workspace = true
+optional = true
+
+[dependencies.deadpool-redis]
+workspace = true
+optional = true
+
+[dependencies.deadpool]
+version = "0.12"
 optional = true
 
 [dev-dependencies]
 mockall = { workspace = true }
 tokio-test = { workspace = true }
+mongodb = { workspace = true }
+testcontainers = "0.25"
+testcontainers-modules = { version = "0.13", features = ["redis"] }
 
 [features]
 # Default enables in-memory and file-based stores
@@ -58,7 +73,7 @@ default = ["memory", "file"]
 # Store implementations
 memory = ["dashmap"]
 file = []
-redis-store = ["redis"]
+redis-store = ["redis", "deadpool-redis", "deadpool"]
 
 # All stores (useful for testing and development)
 all-stores = ["memory", "file", "redis-store"]

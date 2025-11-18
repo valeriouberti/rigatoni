@@ -24,24 +24,26 @@ State store implementations for persisting MongoDB change stream resume tokens, 
 - **Human-readable** - Easy to inspect and debug
 - **One file per collection** - Organized storage
 
-### Redis Store (Coming Soon)
+### Redis Store (Available)
 
 - **Distributed** - Share state across multiple pipeline instances
-- **Highly available** - Redis clustering support
+- **Connection pooling** - Efficient connection management with deadpool
 - **Production-ready** - For multi-instance deployments
+- **TTL support** - Optional token expiration
+- **Retry logic** - Automatic retries with exponential backoff
 
 ## Installation
 
 ```toml
 [dependencies]
-rigatoni-stores = { version = "0.1", features = ["memory", "file"] }
+rigatoni-stores = { version = "0.1", features = ["memory", "file", "redis-store"] }
 ```
 
 ### Available Features
 
 - `memory` - In-memory store (enabled by default)
 - `file` - File-based store (enabled by default)
-- `redis-store` - Redis store (coming soon)
+- `redis-store` - Redis store with connection pooling and retry logic
 - `all-stores` - All store implementations
 
 ## Quick Start
@@ -79,14 +81,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-### Redis Store (Coming Soon)
+### Redis Store (Distributed)
 
 ```rust
-use rigatoni_stores::redis::RedisStore;
+use rigatoni_stores::redis::{RedisStore, RedisConfig};
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let store = RedisStore::new("redis://localhost:6379").await?;
+    // Configure Redis with connection pooling and TTL
+    let config = RedisConfig::builder()
+        .url("redis://localhost:6379")
+        .pool_size(10)
+        .ttl(Duration::from_secs(7 * 24 * 60 * 60)) // 7 days
+        .max_retries(3)
+        .build()?;
+
+    let store = RedisStore::new(config).await?;
 
     // Use with Rigatoni pipeline for distributed state
     // let pipeline = Pipeline::with_store(config, destination, store).await?;
@@ -94,6 +105,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+#### Redis Configuration Options
+
+- `url` - Redis connection URL (supports `redis://` and `rediss://` schemes)
+- `pool_size` - Connection pool size (default: 10)
+- `ttl` - Optional expiration time for resume tokens (recommended: 7-30 days)
+- `max_retries` - Maximum retry attempts for transient errors (default: 3)
+- `connection_timeout` - Connection timeout duration (default: 5 seconds)
+
+**Note**: Redis Cluster mode is not currently implemented. Use Redis Sentinel for high availability.
 
 ## State Store Trait
 
@@ -165,7 +186,11 @@ Use **Memory Store** for fast iteration without persistence
 Use **File Store** for simple, reliable persistence
 
 ### Multi-Instance Production
-Use **Redis Store** (coming soon) for distributed state across instances
+Use **Redis Store** for distributed state across pipeline instances with:
+- Shared resume tokens across multiple workers
+- Connection pooling for efficient Redis usage
+- Automatic retry logic for transient failures
+- Optional TTL to prevent unbounded growth
 
 ## Documentation
 

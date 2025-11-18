@@ -14,4 +14,53 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Placeholder for rigatoni-stores library
+//! State store implementations for Rigatoni ETL framework.
+//!
+//! This crate provides various backend implementations of the
+//! [`StateStore`](rigatoni_core::state::StateStore) trait for persisting
+//! `MongoDB` change stream resume tokens.
+//!
+//! # Available Stores
+//!
+//! - **Redis** (`redis-store` feature): Distributed state storage with Redis
+//!
+//! # Feature Flags
+//!
+//! - `redis-store`: Enables Redis-backed state store (requires Redis server)
+//! - `memory`: In-memory state store (coming soon)
+//! - `file`: File-based state store (coming soon)
+//!
+//! # Example: Redis Store
+//!
+//! ```rust,ignore
+//! use rigatoni_stores::redis::{RedisStore, RedisConfig};
+//! use rigatoni_core::state::StateStore;
+//! use mongodb::bson::doc;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Configure Redis connection
+//! let config = RedisConfig::builder()
+//!     .url("redis://localhost:6379")
+//!     .pool_size(10)
+//!     .build()?;
+//!
+//! // Create store
+//! let store = RedisStore::new(config).await?;
+//!
+//! // Save resume token
+//! let token = doc! { "_data": "token123" };
+//! store.save_resume_token("users", &token).await?;
+//!
+//! // Retrieve token
+//! let retrieved = store.get_resume_token("users").await?;
+//! assert!(retrieved.is_some());
+//! # Ok(())
+//! # }
+//! ```
+
+#![warn(missing_docs)]
+#![warn(clippy::all)]
+#![warn(clippy::pedantic)]
+
+#[cfg(feature = "redis-store")]
+pub mod redis;
