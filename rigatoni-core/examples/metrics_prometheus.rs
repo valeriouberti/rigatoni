@@ -55,7 +55,7 @@ use std::time::Duration;
 use tokio::signal;
 use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
-
+#[allow(clippy::too_many_lines)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize logging

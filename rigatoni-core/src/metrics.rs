@@ -561,7 +561,7 @@ pub fn set_active_collections(count: usize) {
 /// metrics::set_pipeline_status(PipelineStatus::Running);
 /// ```
 pub fn set_pipeline_status(status: PipelineStatus) {
-    gauge!(PIPELINE_STATUS).set(status as u8 as f64);
+    gauge!(PIPELINE_STATUS).set(f64::from(status as u8));
 }
 
 /// Sets the current batch queue size.
