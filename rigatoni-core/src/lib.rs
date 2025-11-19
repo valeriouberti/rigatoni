@@ -45,6 +45,7 @@
 
 pub mod destination;
 pub mod event;
+pub mod metrics;
 pub mod pipeline;
 pub mod state;
 pub mod stream;

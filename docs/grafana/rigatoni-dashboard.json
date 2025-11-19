@@ -1,0 +1,160 @@
+{
+  "dashboard": {
+    "title": "Rigatoni Pipeline Monitoring",
+    "tags": ["rigatoni", "etl", "cdc"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Pipeline Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rigatoni_pipeline_status",
+            "legendFormat": "Status (0=stopped, 1=running, 2=error)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "value": "0", "text": "Stopped"},
+              {"type": "value", "value": "1", "text": "Running"},
+              {"type": "value", "value": "2", "text": "Error"}
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "gray"},
+                {"value": 1, "color": "green"},
+                {"value": 2, "color": "red"}
+              ]
+            }
+          }
+        },
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Active Collections",
+        "type": "stat",
+        "targets": [{"expr": "rigatoni_active_collections"}],
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Events Processed/sec",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rigatoni_events_processed_total[5m])",
+            "legendFormat": "{{collection}} - {{operation}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rigatoni_events_failed_total[5m])",
+            "legendFormat": "{{collection}} - {{error_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+      },
+      {
+        "id": 5,
+        "title": "Batch Size Distribution",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "rate(rigatoni_batch_size_bucket[5m])",
+            "format": "heatmap",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+      },
+      {
+        "id": 6,
+        "title": "Write Latency (p50, p95, p99)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(rigatoni_destination_write_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(rigatoni_destination_write_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(rigatoni_destination_write_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12}
+      },
+      {
+        "id": 7,
+        "title": "Batch Queue Size",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rigatoni_batch_queue_size",
+            "legendFormat": "{{collection}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20}
+      },
+      {
+        "id": 8,
+        "title": "Retry Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rigatoni_retries_total[5m])",
+            "legendFormat": "{{error_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20}
+      },
+      {
+        "id": 9,
+        "title": "Data Written (bytes/sec)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rigatoni_destination_write_bytes_sum[5m])",
+            "legendFormat": "{{destination_type}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28}
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "query": "prometheus"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Pipeline Events",
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "iconColor": "red"
+        }
+      ]
+    }
+  }
+}

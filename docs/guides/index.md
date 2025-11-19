@@ -32,7 +32,7 @@ Task-specific guides for common Rigatoni use cases.
 
 - **[Batching and Performance](batching-performance)** - Tuning for throughput and latency
 - **[Error Handling and Retries](error-handling)** - Handling failures gracefully
-- **[Monitoring and Observability](monitoring)** - Logging, metrics, and debugging
+- **[Observability](../OBSERVABILITY)** - Metrics, Prometheus, Grafana dashboards, and alerting
 
 ### Advanced Topics
 

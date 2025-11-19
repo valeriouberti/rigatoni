@@ -7,16 +7,18 @@ permalink: /getting-started
 ---
 
 # Getting Started
+
 {: .no_toc }
 
 Learn how to install Rigatoni and build your first data pipeline in minutes.
 {: .fs-6 .fw-300 }
 
 ## Table of contents
+
 {: .no_toc .text-delta }
 
 1. TOC
-{:toc}
+   {:toc}
 
 ---
 
@@ -73,17 +75,18 @@ tracing-subscriber = "0.3"
 Rigatoni uses feature flags to reduce compile time and binary size:
 
 **Destination Features:**
+
 - `s3` - AWS S3 destination
-- `bigquery` - Google BigQuery destination
-- `kafka` - Apache Kafka destination
 
 **Format Features:**
+
 - `json` - JSON/JSONL support (default)
 - `csv` - CSV support
 - `parquet` - Apache Parquet support
 - `avro` - Apache Avro support
 
 **Compression Features:**
+
 - `gzip` - Gzip compression
 - `zstandard` - Zstandard compression
 
@@ -327,6 +330,7 @@ let s3_config = S3Config::builder()
 ```
 
 This creates keys like:
+
 ```
 events/collection=users/year=2025/month=01/day=15/hour=10/1705318800000.parquet.zst
 ```
@@ -477,11 +481,104 @@ tokio::select! {
 
 ---
 
+## Metrics and Monitoring
+
+For production deployments, enable Prometheus metrics to monitor your pipeline:
+
+### Step 1: Add Metrics Feature
+
+Update `Cargo.toml`:
+
+```toml
+[dependencies]
+rigatoni-core = { version = "0.1", features = ["metrics-export"] }
+metrics-exporter-prometheus = "0.15"
+```
+
+### Step 2: Enable Metrics in Your Pipeline
+
+```rust
+use metrics_exporter_prometheus::PrometheusBuilder;
+use rigatoni_core::metrics;
+use std::net::SocketAddr;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging
+    tracing_subscriber::fmt::init();
+
+    // Initialize metrics
+    metrics::init_metrics();
+
+    // Start Prometheus exporter on port 9000
+    let prometheus_addr: SocketAddr = ([0, 0, 0, 0], 9000).into();
+    PrometheusBuilder::new()
+        .with_http_listener(prometheus_addr)
+        .install()
+        .expect("Failed to install Prometheus exporter");
+
+    println!("📊 Metrics available at http://localhost:9000/metrics\n");
+
+    // ... rest of pipeline configuration ...
+
+    let mut pipeline = Pipeline::new(config, store, destination).await?;
+    pipeline.start().await?;
+
+    Ok(())
+}
+```
+
+### Step 3: View Metrics
+
+While the pipeline is running, check the metrics:
+
+```bash
+curl http://localhost:9000/metrics | grep rigatoni_
+```
+
+You'll see metrics like:
+
+```
+rigatoni_events_processed_total{collection="users",operation="insert"} 1523
+rigatoni_batch_duration_seconds_sum{collection="users"} 12.5
+rigatoni_destination_write_duration_seconds_count{destination_type="s3"} 15
+```
+
+### Available Metrics
+
+**Counters** (cumulative totals):
+
+- `rigatoni_events_processed_total` - Events successfully processed
+- `rigatoni_events_failed_total` - Events that failed processing
+- `rigatoni_retries_total` - Retry attempts
+- `rigatoni_batches_written_total` - Batches written to destination
+
+**Histograms** (distributions):
+
+- `rigatoni_batch_size` - Batch size distribution
+- `rigatoni_batch_duration_seconds` - Time to process batches
+- `rigatoni_destination_write_duration_seconds` - Write latency
+- `rigatoni_destination_write_bytes` - Data volume written
+
+**Gauges** (point-in-time values):
+
+- `rigatoni_active_collections` - Number of monitored collections
+- `rigatoni_pipeline_status` - Pipeline status (0=stopped, 1=running, 2=error)
+- `rigatoni_batch_queue_size` - Events buffered awaiting write
+
+### Next Steps for Metrics
+
+- **[Observability Guide](OBSERVABILITY)** - Full metrics reference, Prometheus setup, Grafana dashboards
+- **[Example Code](https://github.com/valeriouberti/rigatoni/blob/main/rigatoni-core/examples/metrics_prometheus.rs)** - Complete working example
+
+---
+
 ## Next Steps
 
 Now that you have a working pipeline, explore more features:
 
 - **[Architecture](architecture)** - Understand how Rigatoni works
+- **[Observability](OBSERVABILITY)** - Metrics, monitoring, and alerting
 - **[User Guides](guides/)** - Task-specific guides
 - **[API Reference](https://docs.rs/rigatoni)** - Complete API documentation
 

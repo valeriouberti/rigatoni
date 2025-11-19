@@ -20,6 +20,7 @@ Rigatoni is a modern ETL framework built for speed, reliability, and developer e
 - **S3 Destination** - Export to AWS S3 with multiple formats (JSON, CSV, Parquet, Avro)
 - **Redis State Store** - Distributed state management for multi-instance deployments
 - **Pipeline Orchestration** - Multi-worker architecture with retry logic and state management
+- **Metrics & Observability** - Prometheus metrics with Grafana dashboards
 - **Async-first design** - Powered by Tokio for high throughput
 - **Type-safe transformations** - Compile-time guarantees with Rust's type system
 - **Modular architecture** - Extensible with feature flags
@@ -34,7 +35,8 @@ Rigatoni is a modern ETL framework built for speed, reliability, and developer e
 - 🔄 **Retry Logic**: Exponential backoff with configurable limits
 - 🎯 **Batching**: Automatic batching based on size and time windows
 - 🎨 **Composable Pipelines**: Build ETL workflows from simple, testable components
-- 📝 **Observability**: Comprehensive tracing and metrics
+- 📊 **Metrics**: Prometheus metrics for throughput, latency, errors, and health
+- 📝 **Observability**: Comprehensive tracing, metrics, and Grafana dashboards
 - 🧪 **Testable**: Mock destinations and comprehensive test utilities
 
 ## 🏗️ Architecture
@@ -153,11 +155,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 See [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) for detailed tutorials and [Redis Configuration Guide](https://valeriouberti.github.io/rigatoni/guides/redis-configuration) for production deployment.
 
+### Metrics and Monitoring
+
+Rigatoni includes comprehensive metrics for production observability:
+
+```rust
+use metrics_exporter_prometheus::PrometheusBuilder;
+use rigatoni_core::metrics;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize metrics
+    metrics::init_metrics();
+
+    // Start Prometheus exporter
+    let addr = ([0, 0, 0, 0], 9000).into();
+    PrometheusBuilder::new()
+        .with_http_listener(addr)
+        .install()?;
+
+    // Metrics now available at http://localhost:9000/metrics
+
+    // ... configure and run pipeline ...
+
+    Ok(())
+}
+```
+
+**Available Metrics:**
+- **Counters**: events processed, events failed, retries, batches written
+- **Histograms**: batch size, batch duration, write latency, write bytes
+- **Gauges**: active collections, pipeline status, queue size
+
+See [Observability Guide](docs/OBSERVABILITY.md) for Prometheus setup, Grafana dashboards, and alerting.
+
 ## 📚 Documentation
 
 **User Documentation:**
 - [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) - Quick start guide and tutorials
 - [Architecture Guide](https://valeriouberti.github.io/rigatoni/architecture) - System design and concepts
+- [Observability Guide](docs/OBSERVABILITY.md) - Metrics, monitoring, and alerting
 - [API Reference](https://docs.rs/rigatoni) - Complete API documentation
 - [User Guides](https://valeriouberti.github.io/rigatoni/guides/) - Task-specific guides
 
