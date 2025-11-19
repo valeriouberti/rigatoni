@@ -688,7 +688,15 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         let mut attempt = 0;
 
         loop {
-            match destination.lock().await.write_batch(batch).await {
+            let result = {
+                let mut dest = destination.lock().await;
+                match dest.write_batch(batch).await {
+                    Ok(()) => dest.flush().await,
+                    Err(e) => Err(e),
+                }
+            };
+
+            match result {
                 Ok(()) => {
                     if attempt > 0 {
                         info!(attempts = attempt + 1, "Write succeeded after retries");
