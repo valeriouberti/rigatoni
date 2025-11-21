@@ -22,13 +22,38 @@
 //!
 //! # Available Stores
 //!
+//! - **Memory** (`memory` feature, enabled by default): In-memory state storage
 //! - **Redis** (`redis-store` feature): Distributed state storage with Redis
+//! - **File** (`file` feature, coming soon): File-based state storage
 //!
 //! # Feature Flags
 //!
-//! - `redis-store`: Enables Redis-backed state store (requires Redis server)
-//! - `memory`: In-memory state store (coming soon)
+//! - `memory`: In-memory state store (enabled by default)
+//! - `redis-store`: Redis-backed state store (requires Redis server)
 //! - `file`: File-based state store (coming soon)
+//! - `all-stores`: Enable all available stores
+//!
+//! # Example: In-Memory Store
+//!
+//! ```rust
+//! use rigatoni_stores::memory::MemoryStore;
+//! use rigatoni_core::state::StateStore;
+//! use mongodb::bson::doc;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create in-memory store (no configuration needed)
+//! let store = MemoryStore::new();
+//!
+//! // Save resume token
+//! let token = doc! { "_data": "token123" };
+//! store.save_resume_token("users", &token).await?;
+//!
+//! // Retrieve token
+//! let retrieved = store.get_resume_token("users").await?;
+//! assert!(retrieved.is_some());
+//! # Ok(())
+//! # }
+//! ```
 //!
 //! # Example: Redis Store
 //!
@@ -61,6 +86,9 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
+
+#[cfg(feature = "memory")]
+pub mod memory;
 
 #[cfg(feature = "redis-store")]
 pub mod redis;

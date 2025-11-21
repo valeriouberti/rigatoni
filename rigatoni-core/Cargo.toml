@@ -62,7 +62,7 @@ tokio-test = { workspace = true }
 
 # For examples - need destinations and stores
 rigatoni-destinations = { path = "../rigatoni-destinations", features = ["s3", "gzip", "json"] }
-rigatoni-stores = { path = "../rigatoni-stores", features = ["redis-store"] }
+rigatoni-stores = { path = "../rigatoni-stores", features = ["memory", "redis-store"] }
 
 [features]
 default = ["mongodb-source"]

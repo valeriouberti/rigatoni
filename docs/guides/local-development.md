@@ -39,6 +39,16 @@ This setup mirrors production and is perfect for:
 - Experimenting with configurations
 - Observability testing
 
+> **💡 Want an even simpler setup?**
+>
+> You can skip Redis entirely by using the in-memory state store. Just run:
+> ```bash
+> cargo run --example simple_pipeline_memory
+> ```
+>
+> This requires only MongoDB (no Redis, LocalStack, Prometheus, or Grafana).
+> Perfect for quick experiments! See the [Minimal Setup](#minimal-setup-mongodb-only) section below.
+
 ---
 
 ## Prerequisites
@@ -515,16 +525,50 @@ This creates S3 keys like:
 s3://rigatoni-test-bucket/mongodb-cdc/metrics-demo/users/2025/01/21/1737451200000.json.gz
 ```
 
-### Redis Configuration
+### State Store Configuration
+
+#### Option 1: Redis (Recommended for Full Stack)
+
+For distributed state and production-like setup:
 
 ```rust
-RedisConfig::builder()
+use rigatoni_stores::redis::{RedisStore, RedisConfig};
+
+let config = RedisConfig::builder()
     .url("redis://:redispassword@localhost:6379")
     .pool_size(10)               // Connection pool size
     .ttl(24 hours)               // Resume token TTL
     .max_retries(3)              // Retry Redis operations
-    .build()?
+    .build()?;
+
+let store = RedisStore::new(config).await?;
 ```
+
+#### Option 2: In-Memory (Simplest Setup)
+
+For local development without Redis:
+
+```rust
+use rigatoni_stores::memory::MemoryStore;
+
+let store = MemoryStore::new();  // That's it!
+```
+
+**Pros:**
+- No external dependencies (just MongoDB)
+- Instant setup
+- Perfect for learning and quick testing
+
+**Cons:**
+- Resume tokens lost on restart (pipeline replays from beginning)
+- Single process only (no distributed state)
+
+**When to use:**
+- Local development and experimentation
+- Testing and learning Rigatoni
+- Single-instance deployments where restart is acceptable
+
+See the `simple_pipeline_memory` example for a complete Redis-free setup.
 
 ### Prometheus Configuration
 
@@ -741,6 +785,76 @@ scrape_configs:
 Restart Prometheus:
 ```bash
 docker restart rigatoni-prometheus
+```
+
+---
+
+## Minimal Setup (MongoDB Only)
+
+Want the absolute simplest setup for quick experiments? Use the in-memory state store to skip Redis entirely.
+
+### Step 1: Start Only MongoDB
+
+```bash
+# Start MongoDB with replica set
+docker run -d --name mongodb -p 27017:27017 \
+  mongo:7.0 --replSet rs0 --bind_ip_all
+
+# Initialize replica set (wait a few seconds first)
+docker exec mongodb mongosh --eval "rs.initiate()"
+```
+
+### Step 2: Run the Simple Example
+
+```bash
+cargo run -p rigatoni-core --example simple_pipeline_memory
+```
+
+This example uses:
+- ✅ MongoDB (change streams)
+- ✅ In-memory state store (no Redis!)
+- ✅ Console destination (prints to terminal)
+- ❌ No S3, Prometheus, Grafana, or Redis
+
+### Step 3: Insert Test Data
+
+In another terminal:
+
+```bash
+docker exec mongodb mongosh testdb --eval '
+  db.users.insertOne({
+    name: "Alice",
+    email: "alice@example.com",
+    age: 30
+  })
+'
+```
+
+Watch the events appear in the first terminal!
+
+### What You Get
+
+**Pros:**
+- Fastest possible setup (just MongoDB)
+- No configuration files needed
+- Perfect for learning and quick tests
+- See events in real-time in your terminal
+
+**Cons:**
+- No persistence (resume tokens lost on restart)
+- No observability (metrics, dashboards)
+- No real destination (just console output)
+
+**Perfect for:**
+- First time trying Rigatoni
+- Understanding change streams
+- Quick experiments
+- Testing pipeline logic
+
+### Cleanup
+
+```bash
+docker stop mongodb && docker rm mongodb
 ```
 
 ---

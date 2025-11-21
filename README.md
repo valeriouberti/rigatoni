@@ -191,12 +191,22 @@ See [Observability Guide](docs/OBSERVABILITY.md) for Prometheus setup, Grafana d
 
 ## 📚 Documentation
 
-**User Documentation:**
-- [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) - Quick start guide and tutorials
+**Getting Started:**
+- [Getting Started Guide](https://valeriouberti.github.io/rigatoni/getting-started) - Quick start guide and tutorials
+- [Examples](examples/README.md) - Comprehensive examples guide with runnable code
+  - [Core Examples](rigatoni-core/examples/README.md) - Pipeline, metrics, change streams
+  - [Destination Examples](rigatoni-destinations/examples/README.md) - S3, compression, partitioning
+- [Local Development Guide](docs/guides/local-development.md) - Complete local setup with Docker Compose
+
+**Architecture & Design:**
 - [Architecture Guide](https://valeriouberti.github.io/rigatoni/architecture) - System design and concepts
 - [Observability Guide](docs/OBSERVABILITY.md) - Metrics, monitoring, and alerting
 - [API Reference](https://docs.rs/rigatoni) - Complete API documentation
+
+**Guides:**
 - [User Guides](https://valeriouberti.github.io/rigatoni/guides/) - Task-specific guides
+- [Redis Configuration](docs/guides/redis-configuration.md) - Production state store setup
+- [S3 Configuration](docs/guides/s3-configuration.md) - Data lake best practices
 
 **Developer Documentation:**
 - [Contributing Guide](CONTRIBUTING.md) - How to contribute
