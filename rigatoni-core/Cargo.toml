@@ -60,6 +60,10 @@ rand = { workspace = true }
 mockall = { workspace = true }
 tokio-test = { workspace = true }
 
+# For examples - need destinations and stores
+rigatoni-destinations = { path = "../rigatoni-destinations", features = ["s3", "gzip", "json"] }
+rigatoni-stores = { path = "../rigatoni-stores", features = ["redis-store"] }
+
 [features]
 default = ["mongodb-source"]
 
@@ -75,3 +79,8 @@ optional = true
 [lib]
 name = "rigatoni_core"
 path = "src/lib.rs"
+
+# Examples that use metrics exporter
+[[example]]
+name = "metrics_prometheus"
+required-features = ["metrics-export"]

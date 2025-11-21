@@ -152,6 +152,24 @@ impl OperationType {
     pub const fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown(_))
     }
+
+    /// Returns the operation type as a static string for metrics labels.
+    ///
+    /// This is used for consistent metric labeling without allocations.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Insert => "insert",
+            Self::Update => "update",
+            Self::Delete => "delete",
+            Self::Replace => "replace",
+            Self::Invalidate => "invalidate",
+            Self::Drop => "drop",
+            Self::DropDatabase => "dropdatabase",
+            Self::Rename => "rename",
+            Self::Unknown(s) => s.as_str(),
+        }
+    }
 }
 
 /// `MongoDB` namespace (database + collection).

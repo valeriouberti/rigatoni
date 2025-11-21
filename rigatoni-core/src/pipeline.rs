@@ -58,6 +58,7 @@
 
 use crate::destination::{Destination, DestinationError};
 use crate::event::ChangeEvent;
+use crate::metrics;
 use crate::state::StateStore;
 use crate::stream::{ChangeStreamConfig, ChangeStreamListener};
 use futures::StreamExt;
@@ -386,6 +387,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         self.shutdown_tx = Some(shutdown_tx.clone());
 
         let collections = self.config.collections.clone();
+        let num_collections = collections.len();
 
         // Spawn worker for each collection
         let mut workers = self.workers.write().await;
@@ -400,6 +402,10 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
 
         *running = true;
         info!(workers = workers.len(), "Pipeline started");
+
+        // Update metrics
+        metrics::set_pipeline_status(metrics::PipelineStatus::Running);
+        metrics::set_active_collections(num_collections);
 
         Ok(())
     }
@@ -585,7 +591,10 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                             ackable_event.ack();
 
                             // Add to batch
-                            batch.push(event);
+                            batch.push(event.clone());
+
+                            // Update metrics
+                            metrics::increment_batch_queue_size(&collection);
 
                             // Check if batch is full
                             if batch.len() >= config.batch_size {
@@ -645,6 +654,9 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
 
         debug!("Flushing batch to destination");
 
+        // Record batch size metric
+        metrics::record_batch_size(batch_size, collection);
+
         // Write to destination with retry
         Self::write_with_retry(batch, destination, config, stats).await?;
 
@@ -654,6 +666,9 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             elapsed_ms = elapsed.as_millis(),
             "Batch written successfully"
         );
+
+        // Record batch duration metric
+        metrics::record_batch_duration(elapsed.as_secs_f64(), collection);
 
         // Save resume token after successful write
         if let Some(token) = last_resume_token {
@@ -665,10 +680,22 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             debug!("Resume token saved");
         }
 
+        // Count processed events (bulk increment by operation type)
+        let mut operation_counts = std::collections::HashMap::new();
+        for event in batch.iter() {
+            *operation_counts.entry(&event.operation).or_insert(0u64) += 1;
+        }
+        for (operation, count) in operation_counts {
+            metrics::increment_events_processed_by(count, collection, operation.as_str());
+        }
+
         // Update statistics
         let mut s = stats.write().await;
         s.events_processed += batch_size as u64;
         s.batches_written += 1;
+
+        // Update queue size metric
+        metrics::decrement_batch_queue_size(batch_size, collection);
 
         // Clear batch
         batch.clear();
@@ -710,6 +737,14 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                         s.write_errors += 1;
                     }
 
+                    // Record error type metric
+                    let error_category = Self::categorize_error(&e);
+                    let destination_type = {
+                        let dest = destination.lock().await;
+                        dest.metadata().destination_type.clone()
+                    };
+                    metrics::increment_destination_errors(&destination_type, error_category);
+
                     attempt += 1;
 
                     if attempt > config.max_retries {
@@ -728,6 +763,9 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                         let mut s = stats.write().await;
                         s.retries += 1;
                     }
+
+                    // Record retry metric
+                    metrics::increment_retries(error_category);
 
                     warn!(
                         attempt,
@@ -752,6 +790,31 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         // Check if the error indicates it's retryable
         // This depends on the DestinationError implementation
         error.to_string().contains("retryable") || error.to_string().contains("timeout")
+    }
+
+    /// Categorizes an error for metrics labeling.
+    ///
+    /// Maps errors to a small set of categories to avoid cardinality explosion.
+    fn categorize_error(error: &DestinationError) -> metrics::ErrorCategory {
+        let error_str = error.to_string().to_lowercase();
+
+        if error_str.contains("timeout") {
+            metrics::ErrorCategory::Timeout
+        } else if error_str.contains("connection") || error_str.contains("network") {
+            metrics::ErrorCategory::Connection
+        } else if error_str.contains("serialization") || error_str.contains("encode") {
+            metrics::ErrorCategory::Serialization
+        } else if error_str.contains("permission") || error_str.contains("auth") {
+            metrics::ErrorCategory::Permission
+        } else if error_str.contains("validation") {
+            metrics::ErrorCategory::Validation
+        } else if error_str.contains("not found") || error_str.contains("404") {
+            metrics::ErrorCategory::NotFound
+        } else if error_str.contains("rate limit") || error_str.contains("throttle") {
+            metrics::ErrorCategory::RateLimit
+        } else {
+            metrics::ErrorCategory::Unknown
+        }
     }
 
     /// Stops the pipeline gracefully.
@@ -806,6 +869,10 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             .map_err(|e| PipelineError::Destination(e.to_string()))?;
 
         *running = false;
+
+        // Update metrics
+        metrics::set_pipeline_status(metrics::PipelineStatus::Stopped);
+        metrics::set_active_collections(0);
 
         // Log final statistics
         let stats = self.stats.read().await;

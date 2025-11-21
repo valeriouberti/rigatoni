@@ -1,0 +1,1045 @@
+---
+layout: default
+title: Local Development with Docker Compose
+parent: Guides
+nav_order: 6
+description: "Complete guide to running Rigatoni locally with MongoDB, Redis, LocalStack, Prometheus, and Grafana."
+permalink: /guides/local-development
+---
+
+# Local Development with Docker Compose
+{: .no_toc }
+
+Run a complete Rigatoni pipeline locally with MongoDB, Redis, LocalStack S3, Prometheus, and Grafana.
+{: .fs-6 .fw-300 }
+
+## Table of contents
+{: .no_toc .text-delta }
+
+1. TOC
+{:toc}
+
+---
+
+## Overview
+
+This guide shows you how to run a complete, production-like Rigatoni environment on your local machine using Docker Compose. You'll get:
+
+- **MongoDB** (replica set) - Source database with change streams
+- **Redis** - Distributed state store
+- **LocalStack** - Local AWS S3 emulation
+- **Prometheus** - Metrics collection
+- **Grafana** - Metrics visualization with pre-built dashboards
+- **MongoDB Express** - Web UI for MongoDB
+- **Redis Commander** - Web UI for Redis
+
+This setup mirrors production and is perfect for:
+- Development and testing
+- Learning Rigatoni
+- Experimenting with configurations
+- Observability testing
+
+---
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Docker** (20.10+) - [Install Docker](https://docs.docker.com/get-docker/)
+- **Docker Compose** (v2.0+) - Included with Docker Desktop
+- **Rust** (1.85+) - [Install Rust](https://rustup.rs/)
+- **awslocal** (optional but recommended) - `pip install awscli-local`
+
+### Verify Installation
+
+```bash
+docker --version
+# Docker version 24.0.0 or later
+
+docker compose version
+# Docker Compose version v2.20.0 or later
+
+rustc --version
+# rustc 1.85.0 or later
+```
+
+---
+
+## Quick Start
+
+The fastest way to get started:
+
+### 1. Clone the Repository (if you haven't already)
+
+```bash
+git clone https://github.com/valeriouberti/rigatoni.git
+cd rigatoni
+```
+
+### 2. Run the Quick Start Script
+
+```bash
+./tools/local-development/scripts/quick-start-local.sh
+```
+
+This script will:
+1. Check prerequisites
+2. Start all Docker services
+3. Wait for services to be healthy
+4. Display service URLs and next steps
+
+### 3. Run the Example Pipeline
+
+```bash
+cargo run --example metrics_prometheus --features metrics-export
+```
+
+### 4. Generate Test Data
+
+In a new terminal:
+
+```bash
+./tools/local-development/scripts/generate-test-data.sh
+```
+
+### 5. View the Results
+
+Open your browser to:
+- **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000) (login: admin/admin)
+- **Prometheus**: [http://localhost:9090](http://localhost:9090)
+- **MongoDB Express**: [http://localhost:8081](http://localhost:8081)
+- **Metrics Endpoint**: [http://localhost:9000/metrics](http://localhost:9000/metrics)
+
+That's it! You now have a fully functional Rigatoni pipeline with observability.
+
+---
+
+## Manual Setup (Step by Step)
+
+If you prefer to understand each step or customize the setup:
+
+### Step 1: Start Docker Services
+
+From the repository root:
+
+```bash
+cd rigatoni
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Or simply (docker/ is the default context):
+
+```bash
+cd docker
+docker compose up -d
+```
+
+This starts:
+- MongoDB on port 27017
+- Redis on port 6379
+- LocalStack on port 4566
+- Prometheus on port 9090
+- Grafana on port 3000
+- MongoDB Express on port 8081
+- Redis Commander on port 8082
+
+### Step 2: Verify Services are Running
+
+```bash
+docker compose -f docker/docker-compose.yml ps
+```
+
+All services should show status as "healthy" or "running":
+
+```
+NAME                       STATUS
+rigatoni-mongodb           Up (healthy)
+rigatoni-redis             Up (healthy)
+rigatoni-localstack        Up (healthy)
+rigatoni-prometheus        Up (healthy)
+rigatoni-grafana           Up (healthy)
+rigatoni-mongo-express     Up
+rigatoni-redis-commander   Up
+```
+
+### Step 3: Wait for MongoDB Replica Set
+
+The MongoDB container initializes a replica set automatically. Wait about 30 seconds, then verify:
+
+```bash
+docker exec rigatoni-mongodb mongosh --quiet --eval "rs.status()"
+```
+
+You should see replica set status with PRIMARY node.
+
+### Step 4: Create Test Database and Collection
+
+```bash
+docker exec -it rigatoni-mongodb mongosh
+```
+
+In the MongoDB shell:
+
+```javascript
+use testdb
+
+// Create collections
+db.createCollection("users")
+db.createCollection("orders")
+db.createCollection("products")
+
+// Insert sample data
+db.users.insertMany([
+  { name: "Alice Smith", email: "alice@example.com", age: 30, city: "New York" },
+  { name: "Bob Johnson", email: "bob@example.com", age: 25, city: "San Francisco" },
+  { name: "Carol Williams", email: "carol@example.com", age: 35, city: "Austin" }
+])
+
+db.orders.insertMany([
+  { userId: 1, product: "Widget", amount: 29.99, status: "completed" },
+  { userId: 2, product: "Gadget", amount: 49.99, status: "pending" }
+])
+
+db.products.insertMany([
+  { name: "Widget", price: 29.99, category: "Electronics" },
+  { name: "Gadget", price: 49.99, category: "Electronics" }
+])
+
+exit
+```
+
+### Step 5: Verify LocalStack S3 Bucket
+
+The initialization script creates a test bucket automatically:
+
+```bash
+awslocal s3 ls
+# Should show: rigatoni-test-bucket
+```
+
+If the bucket doesn't exist, create it:
+
+```bash
+awslocal s3 mb s3://rigatoni-test-bucket
+```
+
+### Step 6: Set Environment Variables
+
+The example uses these defaults, but you can customize:
+
+```bash
+export MONGODB_URI="mongodb://localhost:27017/?replicaSet=rs0&directConnection=true"
+export REDIS_URL="redis://:redispassword@localhost:6379"
+export AWS_ACCESS_KEY_ID="test"
+export AWS_SECRET_ACCESS_KEY="test"
+export AWS_REGION="us-east-1"
+```
+
+Or use the setup script:
+
+```bash
+source ./tools/local-development/scripts/setup-local-env.sh
+```
+
+### Step 7: Build the Example
+
+```bash
+cargo build --example metrics_prometheus --features metrics-export
+```
+
+### Step 8: Run the Pipeline
+
+```bash
+cargo run --example metrics_prometheus --features metrics-export
+```
+
+You should see output like:
+
+```
+🚀 Starting Rigatoni with Prometheus Metrics Exporter
+📊 Starting Prometheus exporter on http://0.0.0.0:9000
+✅ Prometheus metrics available at http://localhost:9000/metrics
+🔧 Configuring Redis state store...
+✅ Redis connection established
+🔧 Configuring S3 destination...
+✅ S3 destination configured
+🔧 Configuring Rigatoni pipeline...
+✅ Pipeline created successfully
+
+📊 Metrics Information:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+The pipeline is now running and watching for changes!
+
+### Step 9: Generate Activity
+
+In a new terminal, run the test data generator:
+
+```bash
+./tools/local-development/scripts/generate-test-data.sh
+```
+
+This script continuously inserts documents into MongoDB. You'll see the pipeline process them in real-time.
+
+Alternatively, manually insert data:
+
+```bash
+docker exec -it rigatoni-mongodb mongosh testdb
+```
+
+```javascript
+// Insert users
+db.users.insertOne({
+  name: "David Brown",
+  email: "david@example.com",
+  age: 28,
+  city: "Seattle"
+})
+
+// Insert orders
+db.orders.insertOne({
+  userId: 4,
+  product: "Doohickey",
+  amount: 19.99,
+  status: "pending"
+})
+
+// Update existing
+db.users.updateOne(
+  { name: "Alice Smith" },
+  { $set: { age: 31 } }
+)
+
+// Delete
+db.products.deleteOne({ name: "Widget" })
+```
+
+### Step 10: View Metrics
+
+While the pipeline is running, check the metrics:
+
+```bash
+curl http://localhost:9000/metrics | grep rigatoni_
+```
+
+You'll see metrics like:
+
+```prometheus
+# HELP rigatoni_events_processed_total Total number of events successfully processed
+# TYPE rigatoni_events_processed_total counter
+rigatoni_events_processed_total{collection="users",operation="insert"} 15
+
+# HELP rigatoni_batch_duration_seconds Time taken to process a batch
+# TYPE rigatoni_batch_duration_seconds histogram
+rigatoni_batch_duration_seconds_sum{collection="users"} 0.234
+rigatoni_batch_duration_seconds_count{collection="users"} 3
+
+# HELP rigatoni_pipeline_status Current pipeline status (0=stopped, 1=running, 2=error)
+# TYPE rigatoni_pipeline_status gauge
+rigatoni_pipeline_status 1
+```
+
+---
+
+## Accessing Services
+
+### MongoDB
+
+**Connection String**:
+```
+mongodb://localhost:27017/?replicaSet=rs0&directConnection=true
+```
+
+**Web UI**: [http://localhost:8081](http://localhost:8081)
+
+**CLI Access**:
+```bash
+docker exec -it rigatoni-mongodb mongosh
+```
+
+### Redis
+
+**Connection String**:
+```
+redis://:redispassword@localhost:6379
+```
+
+**Web UI**: [http://localhost:8082](http://localhost:8082)
+
+**CLI Access**:
+```bash
+docker exec -it rigatoni-redis redis-cli -a redispassword
+```
+
+### LocalStack S3
+
+**Endpoint**: `http://localhost:4566`
+
+**List Buckets**:
+```bash
+awslocal s3 ls
+```
+
+**List Objects**:
+```bash
+awslocal s3 ls s3://rigatoni-test-bucket/mongodb-cdc/ --recursive
+```
+
+**Download a File**:
+```bash
+awslocal s3 cp s3://rigatoni-test-bucket/mongodb-cdc/metrics-demo/users/2025/01/21/1737451200000.json.gz ./downloaded.json.gz
+gunzip downloaded.json.gz
+cat downloaded.json
+```
+
+### Prometheus
+
+**Web UI**: [http://localhost:9090](http://localhost:9090)
+
+**Query Examples**:
+
+Navigate to Prometheus → Graph, and try these queries:
+
+```promql
+# Events per second
+rate(rigatoni_events_processed_total[5m])
+
+# Events by collection
+sum by (collection) (rate(rigatoni_events_processed_total[5m]))
+
+# 95th percentile write latency
+histogram_quantile(0.95, rate(rigatoni_destination_write_duration_seconds_bucket[5m]))
+
+# Pipeline status (1 = running)
+rigatoni_pipeline_status
+```
+
+### Grafana
+
+**Web UI**: [http://localhost:3000](http://localhost:3000)
+
+**Login**: admin / admin (change on first login)
+
+**Pre-installed Dashboard**: "Rigatoni Pipeline Dashboard"
+
+The dashboard includes panels for:
+- Pipeline health and status
+- Event throughput by collection
+- Batch processing metrics
+- Write latency percentiles
+- Error rates and retries
+- Queue depths
+- Data volume written
+
+---
+
+## Understanding the Pipeline Flow
+
+Here's what happens when you insert a document:
+
+1. **MongoDB Change Stream**: Document inserted into MongoDB
+   ```javascript
+   db.users.insertOne({ name: "Eve", email: "eve@example.com" })
+   ```
+
+2. **Rigatoni Listener**: Change stream event captured
+   ```
+   INFO rigatoni_core::change_stream: Received event: insert operation for collection users
+   ```
+
+3. **Batching**: Event added to batch queue
+   - Metrics: `rigatoni_batch_queue_size` increases
+
+4. **Batch Processing**: When batch size reached or timeout occurs
+   ```
+   INFO rigatoni_core::pipeline: Processing batch of 50 events for collection users
+   ```
+   - Metrics: `rigatoni_batch_size` recorded
+   - Metrics: `rigatoni_batch_duration_seconds` recorded
+
+5. **State Store**: Resume token saved to Redis
+   ```
+   INFO rigatoni_stores::redis: Saved resume token for users
+   ```
+
+6. **Destination Write**: Batch written to LocalStack S3
+   ```
+   INFO rigatoni_destinations::s3: Writing batch to s3://rigatoni-test-bucket/mongodb-cdc/metrics-demo/users/2025/01/21/1737451200000.json.gz
+   ```
+   - Metrics: `rigatoni_destination_write_duration_seconds` recorded
+   - Metrics: `rigatoni_destination_write_bytes` recorded
+   - Metrics: `rigatoni_events_processed_total` incremented
+   - Metrics: `rigatoni_batches_written_total` incremented
+
+7. **Prometheus Scrape**: Metrics scraped every 15 seconds
+
+8. **Grafana Display**: Dashboard updates with latest metrics
+
+---
+
+## Configuration Details
+
+### Pipeline Configuration
+
+The example uses these settings (see `rigatoni-core/examples/metrics_prometheus.rs:134`):
+
+```rust
+PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0&directConnection=true")
+    .database("testdb")
+    .collections(vec!["users", "orders", "products"])
+    .batch_size(50)              // Batch up to 50 events
+    .batch_timeout(10 seconds)   // Or flush after 10 seconds
+    .max_retries(3)              // Retry failed writes 3 times
+    .build()?
+```
+
+### S3 Destination Configuration
+
+```rust
+S3Config::builder()
+    .bucket("rigatoni-test-bucket")
+    .region("us-east-1")
+    .prefix("mongodb-cdc/metrics-demo")
+    .endpoint_url("http://localhost:4566")  // LocalStack
+    .force_path_style(true)                 // Required for LocalStack
+    .format(SerializationFormat::Json)      // JSON output
+    .compression(Compression::Gzip)         // Gzip compression
+    .key_strategy(KeyGenerationStrategy::DatePartitioned)
+    .build()?
+```
+
+This creates S3 keys like:
+```
+s3://rigatoni-test-bucket/mongodb-cdc/metrics-demo/users/2025/01/21/1737451200000.json.gz
+```
+
+### Redis Configuration
+
+```rust
+RedisConfig::builder()
+    .url("redis://:redispassword@localhost:6379")
+    .pool_size(10)               // Connection pool size
+    .ttl(24 hours)               // Resume token TTL
+    .max_retries(3)              // Retry Redis operations
+    .build()?
+```
+
+### Prometheus Configuration
+
+See `tools/local-development/config/prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'rigatoni'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['host.docker.internal:9000']
+```
+
+Note: `host.docker.internal` allows Prometheus (running in Docker) to reach your host machine where the Rust app exposes metrics on port 9000.
+
+---
+
+## Monitoring with Grafana
+
+### Accessing the Dashboard
+
+1. Open [http://localhost:3000](http://localhost:3000)
+2. Login with admin/admin
+3. Go to Dashboards → Rigatoni Pipeline Dashboard
+
+### Key Panels
+
+**Pipeline Health**:
+- Pipeline status (should be 1.0 = running)
+- Active collections (should be 3: users, orders, products)
+
+**Throughput**:
+- Events processed per second
+- Breakdown by collection
+- Breakdown by operation (insert/update/delete)
+
+**Latency**:
+- p50, p95, p99 write latencies
+- Batch processing duration
+- Histogram of write latencies
+
+**Errors & Retries**:
+- Failed events over time
+- Retry attempts
+- Error types
+
+**Data Volume**:
+- Bytes written per second
+- Cumulative data written
+- Average batch size
+
+**Queue Health**:
+- Current queue depth
+- Queue growth rate
+
+### Setting Up Alerts
+
+Grafana can alert you when things go wrong. Example alert:
+
+1. Edit a panel
+2. Go to Alert tab
+3. Create alert rule:
+
+```
+WHEN avg() OF query(A, 5m, now) IS ABOVE 0.05
+```
+
+This alerts when error rate exceeds 5%.
+
+---
+
+## Testing Different Scenarios
+
+### Scenario 1: High Volume Inserts
+
+```bash
+./tools/local-development/scripts/generate-test-data.sh
+```
+
+Watch metrics:
+- `rigatoni_events_processed_total` should increase rapidly
+- `rigatoni_batch_size` should approach configured max (50)
+- `rigatoni_batch_duration_seconds` shows processing time
+
+### Scenario 2: Updates and Deletes
+
+```bash
+docker exec -it rigatoni-mongodb mongosh testdb
+```
+
+```javascript
+// Bulk updates
+for (let i = 0; i < 100; i++) {
+  db.users.updateOne(
+    { name: "Alice Smith" },
+    { $inc: { age: 1 } }
+  )
+}
+
+// Bulk deletes
+db.orders.deleteMany({ status: "pending" })
+```
+
+Watch metrics labeled with `operation="update"` and `operation="delete"`.
+
+### Scenario 3: Pipeline Restart (Resume Token)
+
+1. Stop the pipeline (Ctrl+C)
+2. Insert data while pipeline is down
+3. Restart the pipeline
+
+The pipeline should catch up, processing all missed events. Resume tokens in Redis ensure no data loss.
+
+Verify:
+```bash
+docker exec -it rigatoni-redis redis-cli -a redispassword
+> KEYS rigatoni:resume_token:*
+> GET rigatoni:resume_token:testdb:users
+```
+
+### Scenario 4: Error Simulation
+
+Temporarily break S3 connectivity:
+
+```bash
+docker stop rigatoni-localstack
+```
+
+Insert data - the pipeline will retry and fail. Watch:
+- `rigatoni_retries_total` increases
+- `rigatoni_events_failed_total` increases
+- `rigatoni_pipeline_status` may change
+
+Restore:
+```bash
+docker start rigatoni-localstack
+```
+
+The pipeline should recover and successfully write queued events.
+
+### Scenario 5: Large Documents
+
+```bash
+docker exec -it rigatoni-mongodb mongosh testdb
+```
+
+```javascript
+db.users.insertOne({
+  name: "Large Doc User",
+  email: "large@example.com",
+  metadata: "x".repeat(100000)  // 100KB document
+})
+```
+
+Watch `rigatoni_destination_write_bytes` to see the impact.
+
+---
+
+## Customizing the Setup
+
+### Change MongoDB Database/Collections
+
+Edit the example code or set environment variables:
+
+```bash
+export MONGODB_DATABASE="mydb"
+export MONGODB_COLLECTIONS="collection1,collection2"
+```
+
+### Change Batch Size
+
+Modify `rigatoni-core/examples/metrics_prometheus.rs:144`:
+
+```rust
+.batch_size(100)              // Larger batches
+.batch_timeout(Duration::from_secs(5))  // Flush sooner
+```
+
+### Use Different S3 Bucket
+
+Edit `rigatoni-core/examples/metrics_prometheus.rs:111`:
+
+```rust
+.bucket("my-custom-bucket")
+```
+
+Then create the bucket in LocalStack:
+
+```bash
+awslocal s3 mb s3://my-custom-bucket
+```
+
+### Use Parquet Instead of JSON
+
+Edit S3 config:
+
+```rust
+.format(SerializationFormat::Parquet)
+.compression(Compression::Zstd)  // Better for Parquet
+```
+
+And update dependencies in `rigatoni-destinations/Cargo.toml` to enable Parquet feature.
+
+### Change Prometheus Scrape Interval
+
+Edit `tools/local-development/config/prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'rigatoni'
+    scrape_interval: 5s  # Scrape every 5 seconds
+```
+
+Restart Prometheus:
+```bash
+docker restart rigatoni-prometheus
+```
+
+---
+
+## Troubleshooting
+
+### MongoDB Not in Replica Set Mode
+
+**Symptom**: Error "change streams are only supported on replica sets"
+
+**Solution**: Verify MongoDB is configured as a replica set:
+
+```bash
+docker exec rigatoni-mongodb mongosh --quiet --eval "rs.status()"
+```
+
+If not initialized, run:
+
+```bash
+docker exec rigatoni-mongodb mongosh --quiet --eval "rs.initiate()"
+```
+
+### Cannot Connect to LocalStack
+
+**Symptom**: S3 destination errors, "Connection refused"
+
+**Solution**: Verify LocalStack is running:
+
+```bash
+curl http://localhost:4566/_localstack/health
+```
+
+Check the container:
+```bash
+docker logs rigatoni-localstack
+```
+
+Restart if needed:
+```bash
+docker restart rigatoni-localstack
+```
+
+### Redis Connection Failed
+
+**Symptom**: "Failed to connect to Redis"
+
+**Solution**: Check Redis is running and password is correct:
+
+```bash
+docker exec rigatoni-redis redis-cli -a redispassword PING
+```
+
+Should return `PONG`.
+
+### Prometheus Not Scraping Metrics
+
+**Symptom**: No data in Grafana
+
+**Solution**:
+
+1. Verify metrics endpoint is accessible:
+   ```bash
+   curl http://localhost:9000/metrics
+   ```
+
+2. Check Prometheus targets:
+   - Open [http://localhost:9090/targets](http://localhost:9090/targets)
+   - Rigatoni target should be "UP"
+
+3. If target is down, check the host:
+   - From inside Prometheus container, the host is `host.docker.internal:9000`
+   - Verify: `docker exec rigatoni-prometheus wget -qO- http://host.docker.internal:9000/metrics`
+
+### Grafana Dashboard Not Loading
+
+**Symptom**: Dashboard shows "No data"
+
+**Solution**:
+
+1. Verify Prometheus datasource:
+   - Go to Configuration → Data Sources
+   - Test the Prometheus connection
+
+2. Check dashboard queries:
+   - Edit a panel
+   - Run query manually in Prometheus UI
+
+3. Ensure pipeline is running and processing data
+
+### Port Already in Use
+
+**Symptom**: "port is already allocated"
+
+**Solution**: Stop conflicting services or change ports in `docker-compose.local.yml`:
+
+```yaml
+services:
+  mongodb:
+    ports:
+      - "27018:27017"  # Use different host port
+```
+
+### Pipeline Not Processing Events
+
+**Symptom**: Metrics show `rigatoni_events_processed_total` is 0
+
+**Solution**:
+
+1. Verify change stream is active:
+   ```bash
+   docker exec rigatoni-mongodb mongosh testdb --eval "db.users.find()"
+   ```
+
+2. Insert a test document:
+   ```bash
+   docker exec rigatoni-mongodb mongosh testdb --eval 'db.users.insertOne({name:"test"})'
+   ```
+
+3. Check pipeline logs for errors:
+   ```bash
+   # In the terminal running the pipeline
+   RUST_LOG=debug cargo run --example metrics_prometheus --features metrics-export
+   ```
+
+### Out of Memory
+
+**Symptom**: Docker or pipeline crashes, system slows down
+
+**Solution**:
+
+1. Reduce batch size and queue depth
+2. Increase Docker memory limits:
+   - Docker Desktop → Settings → Resources → Memory
+   - Allocate at least 4GB
+
+3. Limit collections being watched
+
+### Data Not in S3
+
+**Symptom**: Pipeline runs but no files in LocalStack S3
+
+**Solution**:
+
+1. Check S3 with detailed output:
+   ```bash
+   awslocal s3 ls s3://rigatoni-test-bucket/mongodb-cdc/ --recursive --human-readable
+   ```
+
+2. Verify batch is being flushed (wait for timeout or insert enough documents to trigger batch size)
+
+3. Check pipeline logs for S3 write errors
+
+4. Verify LocalStack S3 is working:
+   ```bash
+   awslocal s3 mb s3://test-bucket
+   echo "test" | awslocal s3 cp - s3://test-bucket/test.txt
+   awslocal s3 ls s3://test-bucket/
+   ```
+
+---
+
+## Stopping and Cleaning Up
+
+### Stop All Services (Keep Data)
+
+```bash
+cd docker
+docker compose down
+```
+
+Or from repository root:
+
+```bash
+docker compose -f docker/docker-compose.yml down
+```
+
+This stops containers but preserves data in Docker volumes.
+
+### Stop and Remove All Data
+
+```bash
+cd docker
+docker compose down -v
+```
+
+Or from repository root:
+
+```bash
+docker compose -f docker/docker-compose.yml down -v
+```
+
+The `-v` flag removes volumes, deleting all MongoDB data, Redis state, LocalStack S3 data, Prometheus metrics, and Grafana config.
+
+### Stop Individual Services
+
+```bash
+docker stop rigatoni-mongodb
+docker stop rigatoni-localstack
+```
+
+### View Logs
+
+```bash
+# All services (from docker/ directory)
+cd docker
+docker compose logs -f
+
+# Or from repository root
+docker compose -f docker/docker-compose.yml logs -f
+
+# Specific service
+docker logs rigatoni-mongodb -f
+docker logs rigatoni-prometheus -f
+```
+
+---
+
+## Next Steps
+
+Now that you have a working local environment:
+
+1. **Experiment with Configuration**: Try different batch sizes, formats, compression
+2. **Add Custom Metrics**: Instrument your own code
+3. **Build Custom Dashboards**: Create Grafana dashboards for your use case
+4. **Test Failure Scenarios**: Simulate errors, restarts, network issues
+5. **Load Testing**: Use the test data generator with high volume
+6. **Deploy to Production**: Adapt this setup for AWS/GCP/Azure
+
+### Additional Resources
+
+- [Getting Started Guide](../getting-started) - Basic pipeline setup
+- [Observability Guide](../OBSERVABILITY) - Comprehensive metrics guide
+- [S3 Configuration](s3-configuration) - S3 destination options
+- [Redis Configuration](redis-configuration) - State store setup
+- [Production Deployment](production-deployment) - Production best practices
+- [Example Code](https://github.com/valeriouberti/rigatoni/tree/main/rigatoni-core/examples) - More examples
+
+---
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Your Local Machine                       │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │                  Docker Compose                       │  │
+│  │                                                        │  │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │  │
+│  │  │ MongoDB  │  │  Redis   │  │   LocalStack S3  │   │  │
+│  │  │  :27017  │  │  :6379   │  │      :4566       │   │  │
+│  │  └─────┬────┘  └─────┬────┘  └────────┬─────────┘   │  │
+│  │        │             │                 │             │  │
+│  │  ┌─────┴─────────────┴─────────────────┴─────────┐   │  │
+│  │  │                                                 │   │  │
+│  │  │  ┌───────────┐  ┌────────────┐  ┌──────────┐  │   │  │
+│  │  │  │Prometheus │  │  Grafana   │  │  Mongo   │  │   │  │
+│  │  │  │   :9090   │  │   :3000    │  │ Express  │  │   │  │
+│  │  │  └─────┬─────┘  └──────┬─────┘  │  :8081   │  │   │  │
+│  │  │        │                │        └──────────┘  │   │  │
+│  │  └────────┼────────────────┼─────────────────────┘   │  │
+│  └───────────┼────────────────┼──────────────────────────┘  │
+│              │                │                              │
+│  ┌───────────┴────────────────┴──────────────────────────┐  │
+│  │        Rigatoni Pipeline (Rust Application)           │  │
+│  │                    :9000 (metrics)                     │  │
+│  │                                                        │  │
+│  │  ┌──────────────┐  ┌──────────┐  ┌────────────────┐  │  │
+│  │  │  Change      │→ │ Batcher  │→ │  S3 Writer     │  │  │
+│  │  │  Stream      │  │          │  │                │  │  │
+│  │  │  Listener    │  │ (Redis)  │  │ (LocalStack)   │  │  │
+│  │  └──────────────┘  └──────────┘  └────────────────┘  │  │
+│  │         ↓                                             │  │
+│  │  ┌──────────────────────────────────────────────────┐ │  │
+│  │  │         Metrics Exporter (Prometheus)            │ │  │
+│  │  └──────────────────────────────────────────────────┘ │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+
+Data Flow:
+1. MongoDB Change Stream → Rigatoni Listener
+2. Events → Batcher (with Redis state)
+3. Batches → S3 Writer (LocalStack)
+4. Metrics → Prometheus → Grafana Dashboards
+```
+
+---
+
+## Summary
+
+You now have a complete local development environment for Rigatoni with:
+
+- Real-time change data capture from MongoDB
+- Distributed state management with Redis
+- Local S3 storage with LocalStack
+- Comprehensive metrics with Prometheus
+- Beautiful dashboards with Grafana
+- Web UIs for easy data inspection
+
+This setup gives you production-like experience locally, making it easy to develop, test, and learn Rigatoni.
+
+Happy building!

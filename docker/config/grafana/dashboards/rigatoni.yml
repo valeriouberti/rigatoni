@@ -1,0 +1,14 @@
+# Grafana Dashboard Provisioning for Rigatoni
+apiVersion: 1
+
+providers:
+  - name: 'Rigatoni Dashboards'
+    orgId: 1
+    folder: 'Rigatoni'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

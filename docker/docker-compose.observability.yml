@@ -1,0 +1,82 @@
+# Rigatoni - Observability Stack Only
+#
+# Just Prometheus and Grafana for metrics visualization.
+#
+# Use this when you:
+# - Already have MongoDB, Redis, and S3 running
+# - Want to add observability to existing setup
+# - Are testing metrics integration
+#
+# Quick Start:
+#   docker compose -f docker-compose.observability.yml up -d
+#
+# Access:
+#   - Prometheus: http://localhost:9090
+#   - Grafana: http://localhost:3000 (admin/admin)
+#
+# Documentation:
+#   docs/OBSERVABILITY.md
+
+services:
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: rigatoni-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: rigatoni-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../docs/grafana:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+networks:
+  rigatoni-network:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

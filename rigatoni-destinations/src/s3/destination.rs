@@ -26,7 +26,9 @@ use aws_sdk_s3::Client as S3Client;
 use chrono::Utc;
 use rigatoni_core::destination::{Destination, DestinationError, DestinationMetadata};
 use rigatoni_core::event::ChangeEvent;
+use rigatoni_core::metrics;
 use std::io::Write;
+use std::time::Instant;
 use tracing::{debug, error, info, warn};
 
 /// S3 destination for writing change stream events to AWS S3.
@@ -463,6 +465,9 @@ impl S3Destination {
             let count = events.len();
             debug!("Writing {} events for collection '{}'", count, collection);
 
+            // Start timer for destination write metrics
+            let start_time = Instant::now();
+
             // Serialize events
             let serialized = self.serialize_events(&events)?;
             let uncompressed_size = serialized.len();
@@ -485,7 +490,7 @@ impl S3Destination {
                 .put_object()
                 .bucket(&self.config.bucket)
                 .key(&key)
-                .body(ByteStream::from(data))
+                .body(ByteStream::from(data.clone()))
                 .content_type(self.config.format.content_type())
                 .send()
                 .await;
@@ -496,6 +501,12 @@ impl S3Destination {
                         "Successfully wrote {} events to s3://{}/{}",
                         count, self.config.bucket, key
                     );
+
+                    // Record successful write metrics
+                    let duration = start_time.elapsed();
+                    metrics::record_destination_write_duration(duration, "s3");
+                    metrics::record_destination_write_bytes(compressed_size, "s3");
+                    metrics::increment_batches_written("s3");
                 }
                 Err(e) => {
                     error!("Failed to write to S3: {}", e);
