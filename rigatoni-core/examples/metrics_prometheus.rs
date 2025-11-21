@@ -7,13 +7,15 @@
 //!
 //! Start the local development stack:
 //! ```bash
-//! docker-compose -f docker-compose.local.yml up -d
+//! cd docker && docker compose up -d
+//! # Or from repository root:
+//! docker compose -f docker/docker-compose.yml up -d
 //! ```
 //!
 //! # Environment Setup
 //!
 //! ```bash
-//! source ./scripts/setup-local-env.sh
+//! source ./docker/scripts/setup-local-env.sh
 //! ```
 //!
 //! # Running the Example

@@ -1,0 +1,233 @@
+# Rigatoni - Complete Local Development Stack
+#
+# This is the main docker-compose file for running a complete Rigatoni
+# environment locally with all services.
+#
+# Services included:
+# - MongoDB (replica set with change streams)
+# - Redis (state store)
+# - LocalStack (S3 emulation)
+# - Prometheus (metrics collection)
+# - Grafana (metrics visualization)
+# - MongoDB Express (MongoDB web UI)
+# - Redis Commander (Redis web UI)
+#
+# Quick Start:
+#   docker compose up -d
+#
+# Stop:
+#   docker compose down
+#
+# Stop and remove data:
+#   docker compose down -v
+#
+# Documentation:
+#   docs/guides/local-development.md
+
+services:
+  # ========================================
+  # Core Data Services
+  # ========================================
+
+  # MongoDB replica set for change streams
+  mongodb:
+    image: mongo:7.0
+    container_name: rigatoni-mongodb
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017", "--noauth"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: |
+        mongosh --quiet --eval "db.adminCommand('ping')" || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # MongoDB initialization - runs once to set up replica set and data
+  mongodb-init:
+    image: mongo:7.0
+    container_name: rigatoni-mongodb-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./scripts/init-mongo.sh:/init-mongo.sh:ro
+    command: bash /init-mongo.sh
+    networks:
+      - rigatoni-network
+    restart: "no"
+
+  # Redis for distributed state management
+  redis:
+    image: redis:7-alpine
+    container_name: rigatoni-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass redispassword
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # ========================================
+  # AWS Services (LocalStack)
+  # ========================================
+
+  # LocalStack for S3 emulation
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: rigatoni-localstack
+    ports:
+      - "4566:4566"            # LocalStack gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - HOSTNAME_EXTERNAL=localhost
+    volumes:
+      - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # ========================================
+  # Observability Stack
+  # ========================================
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: rigatoni-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: rigatoni-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - ./config/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../docs/grafana:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # ========================================
+  # Web UIs (Optional)
+  # ========================================
+
+  # MongoDB Express (optional - web UI for MongoDB)
+  mongo-express:
+    image: mongo-express:latest
+    container_name: rigatoni-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_BASICAUTH: false
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: false
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+    profiles:
+      - ui
+
+  # Redis Commander (optional - web UI for Redis)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: rigatoni-redis-commander
+    ports:
+      - "8082:8081"
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:redispassword
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+    profiles:
+      - ui
+
+# ========================================
+# Networks
+# ========================================
+networks:
+  rigatoni-network:
+    driver: bridge
+
+# ========================================
+# Volumes
+# ========================================
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  localstack_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

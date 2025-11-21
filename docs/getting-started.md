@@ -573,10 +573,25 @@ rigatoni_destination_write_duration_seconds_count{destination_type="s3"} 15
 
 ---
 
+## Complete Local Development Setup
+
+Want a full local environment with MongoDB, Redis, LocalStack, Prometheus, and Grafana?
+
+See the **[Local Development with Docker Compose](guides/local-development)** guide for a complete setup that includes:
+- All services pre-configured with Docker Compose
+- Pre-built Grafana dashboards
+- Test data generators
+- Observability out-of-the-box
+
+This is the recommended approach for learning Rigatoni and local testing.
+
+---
+
 ## Next Steps
 
 Now that you have a working pipeline, explore more features:
 
+- **[Local Development Setup](guides/local-development)** - Complete local environment with observability
 - **[Architecture](architecture)** - Understand how Rigatoni works
 - **[Observability](OBSERVABILITY)** - Metrics, monitoring, and alerting
 - **[User Guides](guides/)** - Task-specific guides

@@ -34,11 +34,15 @@ Task-specific guides for common Rigatoni use cases.
 - **[Error Handling and Retries](error-handling)** - Handling failures gracefully
 - **[Observability](../OBSERVABILITY)** - Metrics, Prometheus, Grafana dashboards, and alerting
 
+### Development and Testing
+
+- **[Local Development with Docker Compose](local-development)** - Complete local setup with MongoDB, Redis, LocalStack, Prometheus, and Grafana
+- **[LocalStack Development](localstack)** - Local development with LocalStack
+- **[Testing Strategies](testing)** - Testing your pipelines
+
 ### Advanced Topics
 
 - **[Production Deployment](production-deployment)** - Best practices for production
-- **[Testing Strategies](testing)** - Testing your pipelines
-- **[LocalStack Development](localstack)** - Local development with LocalStack
 
 ---
 

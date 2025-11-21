@@ -1,0 +1,79 @@
+# Rigatoni - Minimal Stack
+#
+# Minimal setup with only essential services:
+# - MongoDB (replica set)
+# - Redis (state store)
+#
+# Use this when you:
+# - Want to test with real AWS S3 (not LocalStack)
+# - Don't need observability locally
+# - Want fastest startup time
+#
+# Quick Start:
+#   docker compose -f docker-compose.minimal.yml up -d
+#
+# Documentation:
+#   docs/guides/local-development.md
+
+services:
+  # MongoDB replica set for change streams
+  mongodb:
+    image: mongo:7.0
+    container_name: rigatoni-mongodb
+    command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017", "--noauth"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: |
+        mongosh --quiet --eval "db.adminCommand('ping')" || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # MongoDB initialization
+  mongodb-init:
+    image: mongo:7.0
+    container_name: rigatoni-mongodb-init
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./scripts/init-mongo.sh:/init-mongo.sh:ro
+    command: bash /init-mongo.sh
+    networks:
+      - rigatoni-network
+    restart: "no"
+
+  # Redis for distributed state management
+  redis:
+    image: redis:7-alpine
+    container_name: rigatoni-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass redispassword
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+networks:
+  rigatoni-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local

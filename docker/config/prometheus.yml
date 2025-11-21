@@ -1,0 +1,84 @@
+# Prometheus Configuration for Rigatoni Local Development
+
+global:
+  scrape_interval: 15s      # Scrape metrics every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  scrape_timeout: 10s       # Timeout for scraping
+
+  # Attach these labels to any time series or alerts when communicating with
+  # external systems (federation, remote storage, Alertmanager).
+  external_labels:
+    environment: 'local'
+    cluster: 'rigatoni-dev'
+
+# Alertmanager configuration (optional - uncomment to enable)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  # - "alerts/*.yml"
+  # - "recording_rules/*.yml"
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          component: 'prometheus'
+
+  # Rigatoni pipeline metrics
+  # Your Rigatoni application should expose metrics on port 9000
+  - job_name: 'rigatoni'
+    static_configs:
+      # This assumes your Rigatoni app runs on the host machine
+      # and exposes metrics at http://host.docker.internal:9000/metrics
+      - targets: ['host.docker.internal:9000']
+        labels:
+          application: 'rigatoni'
+          component: 'pipeline'
+
+    # Relabel configs to keep only rigatoni metrics
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'rigatoni_.*'
+        action: keep
+
+    # Scrape more frequently for development
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # Optional: Add additional scrape targets for other components
+  # - job_name: 'mongodb_exporter'
+  #   static_configs:
+  #     - targets: ['mongodb-exporter:9216']
+  #       labels:
+  #         component: 'mongodb'
+
+  # - job_name: 'redis_exporter'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+  #       labels:
+  #         component: 'redis'
+
+# Recording rules for pre-aggregated queries (optional)
+# Uncomment and customize as needed
+# recording_rules:
+#   - name: rigatoni_aggregations
+#     interval: 30s
+#     rules:
+#       - record: rigatoni:throughput:rate5m
+#         expr: rate(rigatoni_events_processed_total[5m])
+#
+#       - record: rigatoni:error_rate:rate5m
+#         expr: |
+#           rate(rigatoni_events_failed_total[5m]) /
+#           (rate(rigatoni_events_processed_total[5m]) + rate(rigatoni_events_failed_total[5m]))
+#
+#       - record: rigatoni:write_latency:p99
+#         expr: histogram_quantile(0.99, rate(rigatoni_destination_write_duration_seconds_bucket[5m]))

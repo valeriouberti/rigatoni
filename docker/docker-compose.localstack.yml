@@ -1,0 +1,78 @@
+# Rigatoni - LocalStack Only
+#
+# Just LocalStack S3 for testing S3 destinations.
+#
+# Use this when you:
+# - Only need to test S3 destination functionality
+# - Already have MongoDB and Redis running
+# - Are running integration tests for rigatoni-destinations
+#
+# Quick Start:
+#   docker compose -f docker-compose.localstack.yml up -d
+#
+# Create bucket:
+#   awslocal s3 mb s3://test-bucket
+#
+# Documentation:
+#   rigatoni-destinations/README.md
+
+services:
+  # LocalStack for S3 emulation
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: rigatoni-localstack
+    ports:
+      - "4566:4566"            # LocalStack gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - HOSTNAME_EXTERNAL=localhost
+    volumes:
+      - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init-localstack.sh
+      - localstack_data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - rigatoni-network
+    restart: unless-stopped
+
+  # AWS CLI helper (optional) - creates test bucket
+  aws-cli:
+    image: amazon/aws-cli:latest
+    container_name: rigatoni-aws-cli
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: /bin/sh
+    command: >
+      -c "
+      aws --endpoint-url=http://localstack:4566 s3 mb s3://test-bucket || true &&
+      echo 'LocalStack S3 is ready!' &&
+      echo 'Test bucket created: test-bucket' &&
+      tail -f /dev/null
+      "
+    networks:
+      - rigatoni-network
+    profiles:
+      - helpers
+
+networks:
+  rigatoni-network:
+    driver: bridge
+
+volumes:
+  localstack_data:
+    driver: local
