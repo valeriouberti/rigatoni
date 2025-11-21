@@ -69,6 +69,14 @@ docker compose --profile ui up -d
 - Fastest startup time
 - CI/CD pipelines
 
+**Note:** You can make this even more minimal by using the in-memory StateStore instead of Redis:
+```rust
+use rigatoni_stores::memory::MemoryStore;
+let store = MemoryStore::new();  // No Redis needed!
+```
+
+See the `simple_pipeline_memory` example for a Redis-free setup.
+
 **Start:**
 ```bash
 docker compose -f docker-compose.minimal.yml up -d
