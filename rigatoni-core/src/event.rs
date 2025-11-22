@@ -16,7 +16,7 @@
 
 //! `MongoDB` Change Stream Event Representation
 //!
-//! This module defines the core event types used throughout the Rigatoni ETL pipeline.
+//! This module defines the core event types used throughout the Rigatoni data replication pipeline.
 //! Events represent `MongoDB` change stream operations and flow from sources to destinations.
 //!
 //! # Examples

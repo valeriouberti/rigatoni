@@ -4,7 +4,7 @@ State store implementations for Rigatoni ETL framework - persist resume tokens f
 
 [![Crates.io](https://img.shields.io/crates/v/rigatoni-stores.svg)](https://crates.io/crates/rigatoni-stores)
 [![Documentation](https://docs.rs/rigatoni-stores/badge.svg)](https://docs.rs/rigatoni-stores)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](../LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 
 ## Overview
 
@@ -201,9 +201,4 @@ Use **Redis Store** for distributed state across pipeline instances with:
 
 ## License
 
-Licensed under either of:
-
-- MIT license ([LICENSE-MIT](../LICENSE-MIT) or http://opensource.org/licenses/MIT)
-- Apache License, Version 2.0 ([LICENSE-APACHE](../LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-
-at your option.
+Licensed under the Apache License, Version 2.0 ([LICENSE](../LICENSE) or http://www.apache.org/licenses/LICENSE-2.0).

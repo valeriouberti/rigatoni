@@ -1,10 +1,10 @@
 # rigatoni-destinations
 
-Destination implementations for Rigatoni ETL framework - write data to S3, BigQuery, Kafka, and more.
+Destination implementations for Rigatoni CDC/Data Replication framework - write data to S3, BigQuery, Kafka, and more.
 
 [![Crates.io](https://img.shields.io/crates/v/rigatoni-destinations.svg)](https://crates.io/crates/rigatoni-destinations)
 [![Documentation](https://docs.rs/rigatoni-destinations/badge.svg)](https://docs.rs/rigatoni-destinations)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](../LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 
 ## Overview
 
@@ -157,9 +157,4 @@ cargo test --test s3_integration_test --features s3,json,gzip -- --ignored
 
 ## License
 
-Licensed under either of:
-
-- MIT license ([LICENSE-MIT](../LICENSE-MIT) or http://opensource.org/licenses/MIT)
-- Apache License, Version 2.0 ([LICENSE-APACHE](../LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-
-at your option.
+Licensed under the Apache License, Version 2.0 ([LICENSE](../LICENSE) or http://www.apache.org/licenses/LICENSE-2.0).

@@ -23,21 +23,17 @@ Run a complete Rigatoni pipeline locally with MongoDB, Redis, LocalStack S3, Pro
 
 ## Overview
 
-This guide shows you how to run a complete, production-like Rigatoni environment on your local machine using Docker Compose. You'll get:
+This guide shows you how to run a complete, production-like Rigatoni environment on your local machine using Docker Compose.
 
-- **MongoDB** (replica set) - Source database with change streams
-- **Redis** - Distributed state store
-- **LocalStack** - Local AWS S3 emulation
-- **Prometheus** - Metrics collection
-- **Grafana** - Metrics visualization with pre-built dashboards
-- **MongoDB Express** - Web UI for MongoDB
-- **Redis Commander** - Web UI for Redis
+**What you'll get:** MongoDB (replica set), Redis, LocalStack S3, Prometheus, Grafana, and optional web UIs for MongoDB and Redis.
 
-This setup mirrors production and is perfect for:
-- Development and testing
-- Learning Rigatoni
-- Experimenting with configurations
-- Observability testing
+**Perfect for:** Development, testing, learning Rigatoni, and experimenting with configurations.
+
+> **📖 Technical Reference**
+>
+> For detailed information about Docker Compose files, service configurations, and advanced options, see **[docker/README.md](../../docker/README.md)**.
+>
+> This guide focuses on the step-by-step workflow. The docker README provides technical details about each service, ports, configuration options, and troubleshooting.
 
 > **💡 Want an even simpler setup?**
 >
@@ -128,30 +124,18 @@ That's it! You now have a fully functional Rigatoni pipeline with observability.
 
 If you prefer to understand each step or customize the setup:
 
+> **📖 Note:** This section focuses on the workflow. For technical details about individual services, configuration options, and advanced customization, refer to [docker/README.md](../../docker/README.md).
+
 ### Step 1: Start Docker Services
-
-From the repository root:
-
-```bash
-cd rigatoni
-docker compose -f docker/docker-compose.yml up -d
-```
-
-Or simply (docker/ is the default context):
 
 ```bash
 cd docker
 docker compose up -d
 ```
 
-This starts:
-- MongoDB on port 27017
-- Redis on port 6379
-- LocalStack on port 4566
-- Prometheus on port 9090
-- Grafana on port 3000
-- MongoDB Express on port 8081
-- Redis Commander on port 8082
+This starts all services (MongoDB, Redis, LocalStack, Prometheus, Grafana, and web UIs).
+
+> **📖 Service Details:** For ports, credentials, and configuration of each service, see [docker/README.md](../../docker/README.md)
 
 ### Step 2: Verify Services are Running
 
@@ -354,62 +338,33 @@ rigatoni_pipeline_status 1
 
 ## Accessing Services
 
-### MongoDB
+> **📖 Complete Service Details**
+>
+> For connection strings, ports, and configuration options for all services, see **[docker/README.md - Service Details](../../docker/README.md#service-details)**.
 
-**Connection String**:
-```
-mongodb://localhost:27017/?replicaSet=rs0&directConnection=true
-```
+**Quick Access URLs:**
+- **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000) (admin/admin)
+- **Prometheus**: [http://localhost:9090](http://localhost:9090)
+- **MongoDB Web UI**: [http://localhost:8081](http://localhost:8081)
+- **Redis Web UI**: [http://localhost:8082](http://localhost:8082)
 
-**Web UI**: [http://localhost:8081](http://localhost:8081)
+**Common Commands:**
 
-**CLI Access**:
 ```bash
+# MongoDB CLI
 docker exec -it rigatoni-mongodb mongosh
-```
 
-### Redis
-
-**Connection String**:
-```
-redis://:redispassword@localhost:6379
-```
-
-**Web UI**: [http://localhost:8082](http://localhost:8082)
-
-**CLI Access**:
-```bash
+# Redis CLI
 docker exec -it rigatoni-redis redis-cli -a redispassword
-```
 
-### LocalStack S3
-
-**Endpoint**: `http://localhost:4566`
-
-**List Buckets**:
-```bash
+# List S3 buckets
 awslocal s3 ls
-```
 
-**List Objects**:
-```bash
+# View uploaded files
 awslocal s3 ls s3://rigatoni-test-bucket/mongodb-cdc/ --recursive
 ```
 
-**Download a File**:
-```bash
-awslocal s3 cp s3://rigatoni-test-bucket/mongodb-cdc/metrics-demo/users/2025/01/21/1737451200000.json.gz ./downloaded.json.gz
-gunzip downloaded.json.gz
-cat downloaded.json
-```
-
-### Prometheus
-
-**Web UI**: [http://localhost:9090](http://localhost:9090)
-
-**Query Examples**:
-
-Navigate to Prometheus → Graph, and try these queries:
+**Example Prometheus Queries:**
 
 ```promql
 # Events per second
@@ -420,27 +375,7 @@ sum by (collection) (rate(rigatoni_events_processed_total[5m]))
 
 # 95th percentile write latency
 histogram_quantile(0.95, rate(rigatoni_destination_write_duration_seconds_bucket[5m]))
-
-# Pipeline status (1 = running)
-rigatoni_pipeline_status
 ```
-
-### Grafana
-
-**Web UI**: [http://localhost:3000](http://localhost:3000)
-
-**Login**: admin / admin (change on first login)
-
-**Pre-installed Dashboard**: "Rigatoni Pipeline Dashboard"
-
-The dashboard includes panels for:
-- Pipeline health and status
-- Event throughput by collection
-- Batch processing metrics
-- Write latency percentiles
-- Error rates and retries
-- Queue depths
-- Data volume written
 
 ---
 
@@ -490,9 +425,13 @@ Here's what happens when you insert a document:
 
 ## Configuration Details
 
+> **📖 Service Configuration Reference**
+>
+> For detailed configuration options for all services (MongoDB, Redis, LocalStack, Prometheus, Grafana), see **[docker/README.md - Service Details](../../docker/README.md#service-details)** and **[Environment Variables](../../docker/README.md#environment-variables)**.
+
 ### Pipeline Configuration
 
-The example uses these settings (see `rigatoni-core/examples/metrics_prometheus.rs:134`):
+The example uses these settings (see `rigatoni-core/examples/metrics_prometheus.rs:136`):
 
 ```rust
 PipelineConfig::builder()
@@ -505,84 +444,24 @@ PipelineConfig::builder()
     .build()?
 ```
 
-### S3 Destination Configuration
+### State Store Options
 
-```rust
-S3Config::builder()
-    .bucket("rigatoni-test-bucket")
-    .region("us-east-1")
-    .prefix("mongodb-cdc/metrics-demo")
-    .endpoint_url("http://localhost:4566")  // LocalStack
-    .force_path_style(true)                 // Required for LocalStack
-    .format(SerializationFormat::Json)      // JSON output
-    .compression(Compression::Gzip)         // Gzip compression
-    .key_strategy(KeyGenerationStrategy::DatePartitioned)
-    .build()?
-```
-
-This creates S3 keys like:
-```
-s3://rigatoni-test-bucket/mongodb-cdc/metrics-demo/users/2025/01/21/1737451200000.json.gz
-```
-
-### State Store Configuration
-
-#### Option 1: Redis (Recommended for Full Stack)
-
-For distributed state and production-like setup:
-
+**Option 1: Redis** (Full stack setup - what this guide uses)
 ```rust
 use rigatoni_stores::redis::{RedisStore, RedisConfig};
-
 let config = RedisConfig::builder()
     .url("redis://:redispassword@localhost:6379")
-    .pool_size(10)               // Connection pool size
-    .ttl(24 hours)               // Resume token TTL
-    .max_retries(3)              // Retry Redis operations
     .build()?;
-
 let store = RedisStore::new(config).await?;
 ```
 
-#### Option 2: In-Memory (Simplest Setup)
-
-For local development without Redis:
-
+**Option 2: In-Memory** (Simplest setup - MongoDB only)
 ```rust
 use rigatoni_stores::memory::MemoryStore;
-
-let store = MemoryStore::new();  // That's it!
+let store = MemoryStore::new();
 ```
 
-**Pros:**
-- No external dependencies (just MongoDB)
-- Instant setup
-- Perfect for learning and quick testing
-
-**Cons:**
-- Resume tokens lost on restart (pipeline replays from beginning)
-- Single process only (no distributed state)
-
-**When to use:**
-- Local development and experimentation
-- Testing and learning Rigatoni
-- Single-instance deployments where restart is acceptable
-
-See the `simple_pipeline_memory` example for a complete Redis-free setup.
-
-### Prometheus Configuration
-
-See `tools/local-development/config/prometheus.yml`:
-
-```yaml
-scrape_configs:
-  - job_name: 'rigatoni'
-    scrape_interval: 15s
-    static_configs:
-      - targets: ['host.docker.internal:9000']
-```
-
-Note: `host.docker.internal` allows Prometheus (running in Docker) to reach your host machine where the Rust app exposes metrics on port 9000.
+See [Minimal Setup](#minimal-setup-mongodb-only) section for the in-memory approach.
 
 ---
 
@@ -861,214 +740,71 @@ docker stop mongodb && docker rm mongodb
 
 ## Troubleshooting
 
-### MongoDB Not in Replica Set Mode
+> **📖 Complete Troubleshooting Guide**
+>
+> For detailed troubleshooting of all services (MongoDB, Redis, LocalStack, Prometheus, Grafana), see **[docker/README.md - Troubleshooting](../../docker/README.md#troubleshooting)**.
 
-**Symptom**: Error "change streams are only supported on replica sets"
+### Common Issues
 
-**Solution**: Verify MongoDB is configured as a replica set:
+**Pipeline Not Processing Events**
 
-```bash
-docker exec rigatoni-mongodb mongosh --quiet --eval "rs.status()"
-```
+If metrics show `rigatoni_events_processed_total` is 0:
 
-If not initialized, run:
-
-```bash
-docker exec rigatoni-mongodb mongosh --quiet --eval "rs.initiate()"
-```
-
-### Cannot Connect to LocalStack
-
-**Symptom**: S3 destination errors, "Connection refused"
-
-**Solution**: Verify LocalStack is running:
-
-```bash
-curl http://localhost:4566/_localstack/health
-```
-
-Check the container:
-```bash
-docker logs rigatoni-localstack
-```
-
-Restart if needed:
-```bash
-docker restart rigatoni-localstack
-```
-
-### Redis Connection Failed
-
-**Symptom**: "Failed to connect to Redis"
-
-**Solution**: Check Redis is running and password is correct:
-
-```bash
-docker exec rigatoni-redis redis-cli -a redispassword PING
-```
-
-Should return `PONG`.
-
-### Prometheus Not Scraping Metrics
-
-**Symptom**: No data in Grafana
-
-**Solution**:
-
-1. Verify metrics endpoint is accessible:
-   ```bash
-   curl http://localhost:9000/metrics
-   ```
-
-2. Check Prometheus targets:
-   - Open [http://localhost:9090/targets](http://localhost:9090/targets)
-   - Rigatoni target should be "UP"
-
-3. If target is down, check the host:
-   - From inside Prometheus container, the host is `host.docker.internal:9000`
-   - Verify: `docker exec rigatoni-prometheus wget -qO- http://host.docker.internal:9000/metrics`
-
-### Grafana Dashboard Not Loading
-
-**Symptom**: Dashboard shows "No data"
-
-**Solution**:
-
-1. Verify Prometheus datasource:
-   - Go to Configuration → Data Sources
-   - Test the Prometheus connection
-
-2. Check dashboard queries:
-   - Edit a panel
-   - Run query manually in Prometheus UI
-
-3. Ensure pipeline is running and processing data
-
-### Port Already in Use
-
-**Symptom**: "port is already allocated"
-
-**Solution**: Stop conflicting services or change ports in `docker-compose.local.yml`:
-
-```yaml
-services:
-  mongodb:
-    ports:
-      - "27018:27017"  # Use different host port
-```
-
-### Pipeline Not Processing Events
-
-**Symptom**: Metrics show `rigatoni_events_processed_total` is 0
-
-**Solution**:
-
-1. Verify change stream is active:
-   ```bash
-   docker exec rigatoni-mongodb mongosh testdb --eval "db.users.find()"
-   ```
-
-2. Insert a test document:
+1. Insert a test document:
    ```bash
    docker exec rigatoni-mongodb mongosh testdb --eval 'db.users.insertOne({name:"test"})'
    ```
 
-3. Check pipeline logs for errors:
+2. Check pipeline logs:
    ```bash
-   # In the terminal running the pipeline
    RUST_LOG=debug cargo run --example metrics_prometheus --features metrics-export
    ```
 
-### Out of Memory
+**Data Not in S3**
 
-**Symptom**: Docker or pipeline crashes, system slows down
+If pipeline runs but no files appear in LocalStack:
 
-**Solution**:
-
-1. Reduce batch size and queue depth
-2. Increase Docker memory limits:
-   - Docker Desktop → Settings → Resources → Memory
-   - Allocate at least 4GB
-
-3. Limit collections being watched
-
-### Data Not in S3
-
-**Symptom**: Pipeline runs but no files in LocalStack S3
-
-**Solution**:
-
-1. Check S3 with detailed output:
+1. Check S3:
    ```bash
-   awslocal s3 ls s3://rigatoni-test-bucket/mongodb-cdc/ --recursive --human-readable
+   awslocal s3 ls s3://rigatoni-test-bucket/mongodb-cdc/ --recursive
    ```
 
-2. Verify batch is being flushed (wait for timeout or insert enough documents to trigger batch size)
+2. Verify batch is being flushed (wait for timeout or insert enough documents)
 
-3. Check pipeline logs for S3 write errors
+**Prometheus Not Scraping**
 
-4. Verify LocalStack S3 is working:
+1. Verify metrics endpoint:
    ```bash
-   awslocal s3 mb s3://test-bucket
-   echo "test" | awslocal s3 cp - s3://test-bucket/test.txt
-   awslocal s3 ls s3://test-bucket/
+   curl http://localhost:9000/metrics
    ```
+
+2. Check Prometheus targets at [http://localhost:9090/targets](http://localhost:9090/targets)
+
+For service-specific issues (MongoDB replica set, Redis connection, LocalStack health, port conflicts, etc.), see the [docker/README.md troubleshooting section](../../docker/README.md#troubleshooting).
 
 ---
 
 ## Stopping and Cleaning Up
 
-### Stop All Services (Keep Data)
-
+**Stop all services (keep data):**
 ```bash
-cd docker
-docker compose down
+cd docker && docker compose down
 ```
 
-Or from repository root:
-
+**Stop and remove all data:**
 ```bash
-docker compose -f docker/docker-compose.yml down
+cd docker && docker compose down -v
 ```
 
-This stops containers but preserves data in Docker volumes.
-
-### Stop and Remove All Data
-
+**View logs:**
 ```bash
-cd docker
-docker compose down -v
+docker logs rigatoni-mongodb -f  # Specific service
+cd docker && docker compose logs -f  # All services
 ```
 
-Or from repository root:
-
-```bash
-docker compose -f docker/docker-compose.yml down -v
-```
-
-The `-v` flag removes volumes, deleting all MongoDB data, Redis state, LocalStack S3 data, Prometheus metrics, and Grafana config.
-
-### Stop Individual Services
-
-```bash
-docker stop rigatoni-mongodb
-docker stop rigatoni-localstack
-```
-
-### View Logs
-
-```bash
-# All services (from docker/ directory)
-cd docker
-docker compose logs -f
-
-# Or from repository root
-docker compose -f docker/docker-compose.yml logs -f
-
-# Specific service
-docker logs rigatoni-mongodb -f
-docker logs rigatoni-prometheus -f
-```
+> **📖 Docker Management**
+>
+> For detailed Docker Compose commands, volume management, and individual service control, see **[docker/README.md - Common Commands](../../docker/README.md#common-commands)**.
 
 ---
 

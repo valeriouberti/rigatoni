@@ -47,8 +47,8 @@ cargo --version
 ### Create a New Project
 
 ```bash
-cargo new my-etl-pipeline
-cd my-etl-pipeline
+cargo new my-data-pipeline
+cd my-data-pipeline
 ```
 
 ### Add Dependencies
@@ -57,13 +57,14 @@ Edit your `Cargo.toml`:
 
 ```toml
 [package]
-name = "my-etl-pipeline"
+name = "my-data-pipeline"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 rigatoni-core = "0.1"
 rigatoni-destinations = { version = "0.1", features = ["s3", "json"] }
+rigatoni-stores = { version = "0.1", features = ["memory"] }
 
 # Additional dependencies for the example
 tokio = { version = "1.40", features = ["full"] }
@@ -159,6 +160,7 @@ Create `src/main.rs`:
 ```rust
 use rigatoni_core::pipeline::{Pipeline, PipelineConfig};
 use rigatoni_destinations::s3::{S3Config, S3Destination};
+use rigatoni_stores::memory::MemoryStore;
 use std::error::Error;
 
 #[tokio::main]
@@ -167,6 +169,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
     println!("Starting MongoDB to S3 pipeline...\n");
+
+    // Configure state store (in-memory for simplicity)
+    let store = MemoryStore::new();
 
     // Configure S3 destination
     let s3_config = S3Config::builder()
@@ -179,24 +184,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Configure pipeline
     let config = PipelineConfig::builder()
-        .mongodb_uri("mongodb://localhost:27017")
+        .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
         .database("mydb")
         .collections(vec!["users".to_string()])
         .batch_size(100)
         .build()?;
 
     println!("Configuration:");
-    println!("  MongoDB: mongodb://localhost:27017/mydb");
+    println!("  MongoDB: mongodb://localhost:27017/?replicaSet=rs0");
     println!("  Collections: users");
     println!("  S3 Bucket: my-data-lake");
     println!("  Prefix: mongodb-cdc\n");
 
-    // Create and run pipeline
+    // Create and start pipeline
     println!("Starting pipeline...\n");
-    let mut pipeline = Pipeline::new(config, destination).await?;
-
-    // Run pipeline (this blocks until shutdown)
-    pipeline.run().await?;
+    let mut pipeline = Pipeline::new(config, store, destination).await?;
+    pipeline.start().await?;
 
     Ok(())
 }
@@ -264,7 +267,7 @@ awslocal s3 ls s3://my-data-lake/mongodb-cdc/users/ --recursive
 ```rust
 PipelineConfig::builder()
     // MongoDB connection
-    .mongodb_uri("mongodb://localhost:27017")
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
     .database("mydb")
     .collections(vec!["users".to_string(), "orders".to_string()])
 
@@ -339,7 +342,7 @@ events/collection=users/year=2025/month=01/day=15/hour=10/1705318800000.parquet.
 
 ```rust
 let config = PipelineConfig::builder()
-    .mongodb_uri("mongodb://localhost:27017")
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
     .database("mydb")
     .collections(vec![
         "users".to_string(),
@@ -354,7 +357,7 @@ let config = PipelineConfig::builder()
 
 ```rust
 let config = PipelineConfig::builder()
-    .mongodb_uri("mongodb://localhost:27017")
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
     .database("mydb")
     .collections(vec!["critical_data".to_string()])
     .max_retries(10)           // Retry up to 10 times

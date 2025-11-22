@@ -14,9 +14,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-//! Rigatoni Core - ETL Framework Core Types and Traits
+//! Rigatoni Core - CDC/Data Replication Framework Core Types and Traits
 //!
-//! This crate provides the foundational types and traits for the Rigatoni ETL framework.
+//! This crate provides the foundational types and traits for the Rigatoni CDC/Data Replication framework.
 //! It includes event definitions, pipeline orchestration, and `MongoDB` integration.
 //!
 //! # Key Components

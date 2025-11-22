@@ -1,6 +1,6 @@
 [package]
 name = "rigatoni-destinations"
-description = "Destination implementations for Rigatoni ETL: S3, BigQuery, Kafka, and more"
+description = "Destination implementations for Rigatoni CDC/Data Replication: S3, BigQuery, Kafka, and more"
 readme = "README.md"
 
 # Inherit workspace metadata

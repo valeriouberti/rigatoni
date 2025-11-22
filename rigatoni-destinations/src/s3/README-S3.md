@@ -415,4 +415,4 @@ S3Config::builder()
 
 ## License
 
-Licensed under MIT OR Apache-2.0
+Licensed under the Apache License 2.0

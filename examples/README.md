@@ -1,405 +1,259 @@
 # Rigatoni Examples
 
-This directory serves as a guide to all examples across the Rigatoni workspace. Examples are organized by crate to follow Rust best practices and maintain clear dependency boundaries.
+Welcome to Rigatoni examples! This guide helps you find the right example for your needs.
 
-## Quick Links
+## Quick Start
 
-- [Core Examples](#core-examples) - Pipeline orchestration, change streams, metrics
-- [Destination Examples](#destination-examples) - S3 configurations and features
-- [Getting Started](#getting-started) - Recommended examples for beginners
+### 🚀 Simplest Example (5 minutes)
 
----
-
-## Getting Started
-
-### 🚀 Start Here: Simplest Example
-
-**[simple_pipeline_memory.rs](../rigatoni-core/examples/simple_pipeline_memory.rs)** - Absolute minimum setup
+**[simple_pipeline_memory.rs](../rigatoni-core/examples/simple_pipeline_memory.rs)** - MongoDB only, no external dependencies
 
 ```bash
-# Just MongoDB required (no Redis, S3, Prometheus)
+# Start MongoDB
 docker run -d --name mongodb -p 27017:27017 mongo:7.0 --replSet rs0
 docker exec mongodb mongosh --eval "rs.initiate()"
 
-# Run the example
+# Run example
 cargo run -p rigatoni-core --example simple_pipeline_memory
 ```
 
-**What you'll learn:**
-- Basic pipeline setup
-- In-memory state store (no external dependencies)
-- Console output destination
-- MongoDB change stream integration
-
-**Perfect for:** First-time users, quick experiments, understanding core concepts
+**Perfect for:** First-time users, learning basics, quick experiments
 
 ---
 
-### 📊 Full Stack Example
+### 📊 Full Stack Example (15 minutes)
 
-**[metrics_prometheus.rs](../rigatoni-core/examples/metrics_prometheus.rs)** - Complete production-like setup
+**[metrics_prometheus.rs](../rigatoni-core/examples/metrics_prometheus.rs)** - Production-like setup
 
 ```bash
 # Start all services
 cd docker && docker compose up -d
 
-# Run the example
+# Run example
 cargo run -p rigatoni-core --example metrics_prometheus --features metrics-export
 
 # Generate test data
 ./docker/scripts/generate-test-data.sh
 ```
 
-**What you'll learn:**
-- Redis state store for distributed deployments
-- S3 destination with LocalStack
-- Prometheus metrics integration
-- Grafana dashboards
-- Complete observability setup
-
-**Perfect for:** Production preparation, learning best practices, full feature exploration
+**Perfect for:** Production prep, observability, full feature exploration
 
 ---
 
-## Core Examples
+## All Examples
 
-Located in [`rigatoni-core/examples/`](../rigatoni-core/examples/)
+### Core Examples
+**Location:** [`rigatoni-core/examples/`](../rigatoni-core/examples/)
 
-### 1. simple_pipeline_memory.rs
+| Example | Difficulty | Dependencies | Description |
+|---------|-----------|--------------|-------------|
+| **simple_pipeline_memory.rs** | ⭐ Beginner | MongoDB | In-memory state, console output |
+| **metrics_prometheus.rs** | ⭐⭐ Intermediate | Full stack | Redis, S3, Prometheus, Grafana |
+| **change_stream_listener.rs** | ⭐⭐ Intermediate | MongoDB | Low-level change stream API |
 
-**Difficulty:** ⭐ Beginner
-**Dependencies:** MongoDB only
-**Run time:** `cargo run -p rigatoni-core --example simple_pipeline_memory`
-
-The simplest possible Rigatoni setup. Perfect starting point for beginners.
-
-**Features:**
-- In-memory state store (no Redis)
-- Console destination (prints to terminal)
-- Minimal configuration
-- Real-time event visualization
-
-**Use when:**
-- Learning Rigatoni for the first time
-- Quick local experiments
-- Testing pipeline logic
-- No infrastructure setup desired
-
-**Related docs:**
-- [Local Development Guide - Minimal Setup](../docs/guides/local-development.md#minimal-setup-mongodb-only)
-- [In-Memory StateStore API](https://docs.rs/rigatoni-stores/latest/rigatoni_stores/memory/)
+**[View detailed core examples documentation →](../rigatoni-core/examples/README.md)**
 
 ---
 
-### 2. metrics_prometheus.rs
+### Destination Examples
+**Location:** [`rigatoni-destinations/examples/`](../rigatoni-destinations/examples/)
 
-**Difficulty:** ⭐⭐ Intermediate
-**Dependencies:** MongoDB, Redis, LocalStack, Prometheus, Grafana
-**Run time:** `cargo run -p rigatoni-core --example metrics_prometheus --features metrics-export`
+| Example | Difficulty | Key Features | Description |
+|---------|-----------|--------------|-------------|
+| **s3_basic.rs** | ⭐ Beginner | JSON, LocalStack | Simple S3 upload |
+| **s3_with_compression.rs** | ⭐⭐ Intermediate | Gzip, Zstd | Compression strategies |
+| **s3_advanced.rs** | ⭐⭐⭐ Advanced | Parquet, partitioning | Analytics data lake |
 
-Complete production-like example with full observability stack.
-
-**Features:**
-- Redis state store for fault tolerance
-- S3 destination with LocalStack
-- Prometheus metrics export
-- Grafana dashboard integration
-- Graceful shutdown handling
-
-**Use when:**
-- Preparing for production deployment
-- Learning observability patterns
-- Testing distributed state management
-- Building monitoring dashboards
-
-**Related docs:**
-- [Local Development Guide](../docs/guides/local-development.md)
-- [Observability Guide](../docs/OBSERVABILITY.md)
-- [Redis Configuration](../docs/guides/redis-configuration.md)
+**[View detailed destination examples documentation →](../rigatoni-destinations/examples/README.md)**
 
 ---
 
-### 3. change_stream_listener.rs
+## Common Setup
 
-**Difficulty:** ⭐⭐ Intermediate
-**Dependencies:** MongoDB
-**Run time:** `cargo run -p rigatoni-core --example change_stream_listener`
+### Prerequisites
 
-Low-level change stream API examples demonstrating direct usage without the full pipeline.
+- **Rust 1.85+**
+- **Docker** and Docker Compose
+- **awslocal** (optional, for S3 examples)
 
-**Features:**
-- Basic change stream listener
-- Filtering change events
-- Resume token handling
-- Multi-collection watching
-
-**Use when:**
-- Understanding MongoDB change streams
-- Building custom integrations
-- Need lower-level control
-- Learning the underlying mechanisms
-
-**Related docs:**
-- [Architecture - Change Streams](../docs/architecture.md)
-- [ChangeStreamListener API](https://docs.rs/rigatoni-core/latest/rigatoni_core/stream/)
-
----
-
-## Destination Examples
-
-Located in [`rigatoni-destinations/examples/`](../rigatoni-destinations/examples/)
-
-### 1. s3_basic.rs
-
-**Difficulty:** ⭐ Beginner
-**Dependencies:** AWS credentials or LocalStack
-**Run time:** `cargo run -p rigatoni-destinations --example s3_basic --features s3,json`
-
-Simplest S3 destination usage with JSON serialization.
-
-**Features:**
-- Basic S3 configuration
-- JSON serialization
-- No compression
-- Default partitioning
-
-**Use when:**
-- First time using S3 destination
-- Simple data lake setup
-- Learning S3 destination basics
-
-**Environment setup:**
-```bash
-export S3_BUCKET="your-bucket-name"
-export AWS_REGION="us-east-1"
-# AWS credentials via ~/.aws/credentials or environment
-```
-
----
-
-### 2. s3_with_compression.rs
-
-**Difficulty:** ⭐⭐ Intermediate
-**Dependencies:** AWS credentials or LocalStack
-**Run time:** `cargo run -p rigatoni-destinations --example s3_with_compression --features s3,json,gzip`
-
-Demonstrates compression options for reducing storage costs and improving performance.
-
-**Features:**
-- Gzip compression
-- Zstandard compression
-- Compression trade-offs
-- Storage optimization
-
-**Use when:**
-- Optimizing storage costs
-- Improving upload performance
-- Large data volumes
-- Bandwidth constraints
-
----
-
-### 3. s3_advanced.rs
-
-**Difficulty:** ⭐⭐⭐ Advanced
-**Dependencies:** AWS credentials or LocalStack
-**Run time:** `cargo run -p rigatoni-destinations --example s3_advanced --features s3,json,parquet,gzip,zstandard`
-
-Advanced S3 features including multiple formats, compression, and partitioning strategies.
-
-**Features:**
-- Multiple serialization formats (JSON, Parquet)
-- Different compression algorithms
-- Hive-style partitioning
-- Date-based partitioning
-- Custom key generation strategies
-
-**Use when:**
-- Building production data lakes
-- Analytics workloads
-- Need partitioning for performance
-- Working with data warehouses
-
-**Related docs:**
-- [S3 Configuration Guide](../docs/guides/s3-configuration.md)
-
----
-
-## Running Examples by Use Case
-
-### Local Development / Learning
+### MongoDB Setup (Required for Core Examples)
 
 ```bash
-# Simplest setup - just MongoDB
-cargo run -p rigatoni-core --example simple_pipeline_memory
+# Start MongoDB replica set
+docker run -d --name mongodb -p 27017:27017 mongo:7.0 --replSet rs0
+
+# Initialize replica set
+docker exec mongodb mongosh --eval "rs.initiate()"
+
+# Verify
+docker exec mongodb mongosh --eval "rs.status()"
 ```
 
-### Testing with S3
+### Full Stack Setup (For metrics_prometheus Example)
+
+```bash
+# Start all services
+cd docker
+docker compose up -d
+
+# Verify all services are running
+docker compose ps
+```
+
+Services started:
+- MongoDB (port 27017)
+- Redis (port 6379)
+- LocalStack S3 (port 4566)
+- Prometheus (port 9090)
+- Grafana (port 3000)
+
+### LocalStack Setup (For S3 Examples)
 
 ```bash
 # Start LocalStack
 docker compose -f docker/docker-compose.localstack.yml up -d
 
-# Run S3 examples
-cargo run -p rigatoni-destinations --example s3_basic --features s3,json
+# Create test bucket
+awslocal s3 mb s3://rigatoni-test-bucket
+
+# Verify
+awslocal s3 ls
 ```
 
-### Full Production-Like Setup
+**Environment variables:**
+```bash
+export AWS_ENDPOINT_URL=http://localhost:4566
+export AWS_REGION=us-east-1
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+```
+
+---
+
+## Running Examples
+
+### Core Examples
 
 ```bash
-# Start all services
-docker compose -f docker/docker-compose.yml up -d
+# Simple pipeline
+cargo run -p rigatoni-core --example simple_pipeline_memory
 
-# Run full stack example
+# Full stack with metrics
 cargo run -p rigatoni-core --example metrics_prometheus --features metrics-export
+
+# Change stream listener
+cargo run -p rigatoni-core --example change_stream_listener
 ```
 
-### Understanding Change Streams
+### Destination Examples
 
 ```bash
-# Just MongoDB needed
-cargo run -p rigatoni-core --example change_stream_listener
+# Basic S3
+cargo run -p rigatoni-destinations --example s3_basic --features s3,json
+
+# With compression
+cargo run -p rigatoni-destinations --example s3_with_compression --features s3,json,gzip
+
+# Advanced (all features)
+cargo run -p rigatoni-destinations --example s3_advanced --all-features
 ```
 
 ---
 
 ## Example Matrix
 
-| Example | MongoDB | Redis | S3 | Metrics | Difficulty | Time to Run |
-|---------|---------|-------|----|---------| ----------|-------------|
-| simple_pipeline_memory | ✅ | ❌ | ❌ | ❌ | ⭐ | < 5 min |
-| change_stream_listener | ✅ | ❌ | ❌ | ❌ | ⭐⭐ | < 5 min |
-| s3_basic | ❌ | ❌ | ✅ | ❌ | ⭐ | < 5 min |
-| s3_with_compression | ❌ | ❌ | ✅ | ❌ | ⭐⭐ | < 5 min |
-| s3_advanced | ❌ | ❌ | ✅ | ❌ | ⭐⭐⭐ | < 5 min |
-| metrics_prometheus | ✅ | ✅ | ✅ | ✅ | ⭐⭐ | 10-15 min |
-
----
-
-## Prerequisites by Example
-
-### Minimal (simple_pipeline_memory)
-- Docker
-- Rust 1.85+
-
-### Standard (most examples)
-- Docker
-- Rust 1.85+
-- AWS credentials (or LocalStack)
-
-### Full Stack (metrics_prometheus)
-- Docker & Docker Compose
-- Rust 1.85+
-- awslocal (optional but recommended)
-
----
-
-## Common Issues
-
-### MongoDB Not in Replica Set Mode
-
-Many examples require MongoDB to be in replica set mode for change streams:
-
-```bash
-# Start MongoDB with replica set
-docker run -d --name mongodb -p 27017:27017 mongo:7.0 --replSet rs0
-
-# Initialize replica set
-docker exec mongodb mongosh --eval "rs.initiate()"
-```
-
-### LocalStack S3 Bucket Not Found
-
-Create buckets before running S3 examples:
-
-```bash
-awslocal s3 mb s3://rigatoni-test-bucket
-```
-
-### Redis Connection Failed
-
-Make sure Redis is running:
-
-```bash
-docker compose -f docker/docker-compose.yml up -d redis
-```
+| Example | MongoDB | Redis | S3 | Metrics | Time | Difficulty |
+|---------|---------|-------|----|---------| -----|------------|
+| simple_pipeline_memory | ✅ | ❌ | ❌ | ❌ | < 5 min | ⭐ |
+| change_stream_listener | ✅ | ❌ | ❌ | ❌ | < 5 min | ⭐⭐ |
+| s3_basic | ❌ | ❌ | ✅ | ❌ | < 5 min | ⭐ |
+| s3_with_compression | ❌ | ❌ | ✅ | ❌ | < 5 min | ⭐⭐ |
+| s3_advanced | ❌ | ❌ | ✅ | ❌ | < 5 min | ⭐⭐⭐ |
+| metrics_prometheus | ✅ | ✅ | ✅ | ✅ | 10-15 min | ⭐⭐ |
 
 ---
 
 ## Learning Path
 
-**Recommended progression for learning Rigatoni:**
+**Recommended progression:**
 
-1. **Start Simple** → `simple_pipeline_memory.rs`
-   - Get comfortable with basic pipeline concepts
-   - See real-time change stream events
-   - No infrastructure complexity
+1. **Start Simple** → [simple_pipeline_memory.rs](../rigatoni-core/examples/simple_pipeline_memory.rs)
+   - Learn pipeline basics without infrastructure complexity
 
-2. **Add S3** → `s3_basic.rs`
-   - Learn destination patterns
-   - Understand serialization
-   - See data persistence
+2. **Add S3** → [s3_basic.rs](../rigatoni-destinations/examples/s3_basic.rs)
+   - Understand destinations and data persistence
 
-3. **Add Compression** → `s3_with_compression.rs`
-   - Optimize storage
-   - Compare compression algorithms
-   - Production considerations
+3. **Add Compression** → [s3_with_compression.rs](../rigatoni-destinations/examples/s3_with_compression.rs)
+   - Optimize storage costs
 
-4. **Full Observability** → `metrics_prometheus.rs`
-   - Production monitoring
-   - Grafana dashboards
-   - Distributed state with Redis
+4. **Full Observability** → [metrics_prometheus.rs](../rigatoni-core/examples/metrics_prometheus.rs)
+   - Production monitoring and distributed state
 
-5. **Advanced Features** → `s3_advanced.rs` & `change_stream_listener.rs`
-   - Custom partitioning
-   - Low-level control
-   - Performance optimization
+5. **Advanced** → [s3_advanced.rs](../rigatoni-destinations/examples/s3_advanced.rs) & [change_stream_listener.rs](../rigatoni-core/examples/change_stream_listener.rs)
+   - Custom partitioning and low-level control
 
 ---
 
-## Contributing Examples
+## Common Issues
 
-When adding new examples:
+### MongoDB: "change stream is only supported on replica sets"
 
-1. **Place in appropriate crate** - Keep examples with the features they demonstrate
-2. **Include comprehensive documentation** - Explain what, why, and when
-3. **Minimize dependencies** - Only require what's necessary
-4. **Add error handling** - Show proper error handling patterns
-5. **Update this README** - Add entry with metadata
-6. **Test thoroughly** - Ensure example works from clean state
+**Solution:**
+```bash
+docker exec mongodb mongosh --eval "rs.initiate()"
+```
+
+### LocalStack: Bucket not found
+
+**Solution:**
+```bash
+awslocal s3 mb s3://rigatoni-test-bucket
+```
+
+### Redis: Connection refused
+
+**Solution:**
+```bash
+docker compose -f docker/docker-compose.yml up -d redis
+```
+
+### Example not found
+
+**Solution:** Check you're using the correct package name:
+```bash
+cargo run -p rigatoni-core --example <name>        # For core examples
+cargo run -p rigatoni-destinations --example <name> # For destination examples
+```
 
 ---
 
-## Additional Resources
+## Detailed Documentation
 
-- **[Documentation](https://valeriouberti.github.io/rigatoni/)** - Full documentation site
-- **[API Reference](https://docs.rs/rigatoni)** - Complete API documentation
-- **[Architecture Guide](../docs/architecture.md)** - System design and concepts
-- **[Getting Started](../docs/getting-started.md)** - Step-by-step tutorial
-- **[Local Development](../docs/guides/local-development.md)** - Complete local setup guide
+- **[Core Examples Guide](../rigatoni-core/examples/README.md)** - Detailed docs for pipeline, metrics, and change stream examples
+- **[Destination Examples Guide](../rigatoni-destinations/examples/README.md)** - Detailed docs for S3 examples with compression and partitioning
+- **[Local Development Guide](../docs/guides/local-development.md)** - Complete local setup with docker-compose
+- **[S3 Configuration Guide](../docs/guides/s3-configuration.md)** - Production S3 patterns
+- **[Observability Guide](../docs/OBSERVABILITY.md)** - Metrics and monitoring
 
 ---
 
 ## Need Help?
 
-- **Issues:** [GitHub Issues](https://github.com/valeriouberti/rigatoni/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/valeriouberti/rigatoni/discussions)
-- **Documentation:** [guides/](../docs/guides/)
+- **[GitHub Discussions](https://github.com/valeriouberti/rigatoni/discussions)** - Ask questions
+- **[GitHub Issues](https://github.com/valeriouberti/rigatoni/issues)** - Report problems
+- **[Documentation](https://valeriouberti.github.io/rigatoni)** - Full docs
 
 ---
 
-## Quick Reference Commands
+**Quick Reference:**
 
 ```bash
 # List all examples
 cargo run --example
 
-# Run specific example
-cargo run -p <crate-name> --example <example-name>
+# Run with features
+cargo run -p <crate> --example <name> --features <features>
 
-# With features
-cargo run -p <crate-name> --example <example-name> --features <features>
-
-# See example help
-cargo run -p <crate-name> --example <example-name> -- --help
+# See example source
+cat rigatoni-core/examples/<name>.rs
 ```

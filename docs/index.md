@@ -2,14 +2,14 @@
 layout: default
 title: Home
 nav_order: 1
-description: "Rigatoni is a high-performance, type-safe ETL framework for Rust, focused on real-time data pipelines."
+description: "Rigatoni is a high-performance, type-safe CDC/Data Replication framework for Rust, focused on real-time data pipelines."
 permalink: /
 ---
 
 # Rigatoni
 {: .fs-9 }
 
-A high-performance, type-safe ETL framework for Rust, focused on real-time data pipelines.
+A high-performance, type-safe CDC/Data Replication framework for Rust, focused on real-time data pipelines.
 {: .fs-6 .fw-300 }
 
 [Get Started](getting-started){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
@@ -19,7 +19,7 @@ A high-performance, type-safe ETL framework for Rust, focused on real-time data 
 
 ## Overview
 
-Rigatoni is a modern ETL (Extract, Transform, Load) framework built with Rust, designed for production-ready real-time data pipelines. It combines the performance and safety of Rust with an intuitive API for building reliable data pipelines.
+Rigatoni is a modern CDC (Change Data Capture) and data replication framework built with Rust, designed for production-ready real-time data pipelines. It combines the performance and safety of Rust with an intuitive API for reliably replicating data from databases to data lakes and other destinations.
 
 ### Key Features
 
@@ -29,7 +29,7 @@ Rigatoni is a modern ETL (Extract, Transform, Load) framework built with Rust, d
 - **📦 S3 Integration** - Multiple formats (JSON, CSV, Parquet, Avro) with compression
 - **🔄 Retry Logic** - Exponential backoff with configurable limits
 - **🎯 Batching** - Automatic batching based on size and time windows
-- **🎨 Composable** - Build ETL workflows from simple, testable components
+- **🎨 Composable** - Build data replication workflows from simple, testable components
 - **📝 Observable** - Comprehensive tracing and metrics support
 
 ## Quick Start
@@ -42,6 +42,7 @@ Add Rigatoni to your `Cargo.toml`:
 [dependencies]
 rigatoni-core = "0.1"
 rigatoni-destinations = { version = "0.1", features = ["s3"] }
+rigatoni-stores = { version = "0.1", features = ["memory"] }
 ```
 
 ### Your First Pipeline
@@ -51,9 +52,13 @@ Create a simple MongoDB to S3 pipeline:
 ```rust
 use rigatoni_core::pipeline::{Pipeline, PipelineConfig};
 use rigatoni_destinations::s3::{S3Config, S3Destination};
+use rigatoni_stores::memory::MemoryStore;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Configure state store
+    let store = MemoryStore::new();
+
     // Configure S3 destination
     let s3_config = S3Config::builder()
         .bucket("my-data-lake")
@@ -65,15 +70,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure pipeline
     let config = PipelineConfig::builder()
-        .mongodb_uri("mongodb://localhost:27017")
+        .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
         .database("mydb")
         .collections(vec!["users", "orders"])
         .batch_size(1000)
         .build()?;
 
-    // Run pipeline
-    let mut pipeline = Pipeline::new(config, destination).await?;
-    pipeline.run().await?;
+    // Create and run pipeline
+    let mut pipeline = Pipeline::new(config, store, destination).await?;
+    pipeline.start().await?;
 
     Ok(())
 }
@@ -144,9 +149,7 @@ Capture all database changes for audit and replay:
 
 ## License
 
-Rigatoni is dual-licensed under **MIT OR Apache-2.0**.
-
-You may choose either license for your use of this software.
+Rigatoni is licensed under the **Apache License 2.0**.
 
 ---
 

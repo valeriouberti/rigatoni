@@ -17,7 +17,7 @@
 //! Destination Trait and Error Types
 //!
 //! This module defines the core [`Destination`] trait that all destination implementations
-//! must satisfy. Destinations are the final stage in the ETL pipeline where processed
+//! must satisfy. Destinations are the final stage in the data replication pipeline where processed
 //! events are written to external systems like S3, `BigQuery`, Kafka, or databases.
 //!
 //! # Architecture
@@ -155,7 +155,7 @@
 //! - Static dispatch: Faster (no vtable), larger binary (code duplication), compile-time type
 //! - Dynamic dispatch: Smaller binary, allows runtime destination selection, slight overhead
 //!
-//! For most ETL workloads, the difference is negligible compared to I/O costs.
+//! For most data replication workloads, the difference is negligible compared to I/O costs.
 //!
 //! # Future Evolution
 //!

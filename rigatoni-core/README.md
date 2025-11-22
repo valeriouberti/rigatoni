@@ -1,14 +1,14 @@
 # rigatoni-core
 
-Core traits, pipeline orchestration, and MongoDB integration for the Rigatoni ETL framework.
+Core traits, pipeline orchestration, and MongoDB integration for the Rigatoni CDC/Data Replication framework.
 
 [![Crates.io](https://img.shields.io/crates/v/rigatoni-core.svg)](https://crates.io/crates/rigatoni-core)
 [![Documentation](https://docs.rs/rigatoni-core/badge.svg)](https://docs.rs/rigatoni-core)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](../LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 
 ## Overview
 
-`rigatoni-core` provides the foundational components for building ETL pipelines with Rigatoni:
+`rigatoni-core` provides the foundational components for building data replication pipelines with Rigatoni:
 
 - **Pipeline Orchestration** - Multi-worker architecture with retry logic and graceful shutdown
 - **MongoDB Source** - Real-time change stream integration with resume token support
@@ -65,9 +65,4 @@ This crate includes:
 
 ## License
 
-Licensed under either of:
-
-- MIT license ([LICENSE-MIT](../LICENSE-MIT) or http://opensource.org/licenses/MIT)
-- Apache License, Version 2.0 ([LICENSE-APACHE](../LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-
-at your option.
+Licensed under the Apache License, Version 2.0 ([LICENSE](../LICENSE) or http://www.apache.org/licenses/LICENSE-2.0).

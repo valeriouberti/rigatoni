@@ -5,14 +5,14 @@
 </p>
 
 [![CI](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml/badge.svg)](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-> A high-performance, type-safe ETL framework for Rust, focused on real-time data pipelines.
+> A high-performance, type-safe CDC/Data Replication framework for Rust, focused on real-time data pipelines.
 
 ## 🎯 Overview
 
-Rigatoni is a modern ETL framework built for speed, reliability, and developer experience. Built with Rust's type system and async/await, it provides production-ready data pipelines for real-time streaming workloads.
+Rigatoni is a modern CDC (Change Data Capture) and data replication framework built for speed, reliability, and developer experience. Built with Rust's type system and async/await, it provides production-ready data pipelines for real-time streaming workloads from databases to data lakes and other destinations.
 
 **Currently supporting:**
 
@@ -34,7 +34,7 @@ Rigatoni is a modern ETL framework built for speed, reliability, and developer e
 - 🗄️ **Distributed State**: Redis-backed state store for multi-instance deployments
 - 🔄 **Retry Logic**: Exponential backoff with configurable limits
 - 🎯 **Batching**: Automatic batching based on size and time windows
-- 🎨 **Composable Pipelines**: Build ETL workflows from simple, testable components
+- 🎨 **Composable Pipelines**: Build data replication workflows from simple, testable components
 - 📊 **Metrics**: Prometheus metrics for throughput, latency, errors, and health
 - 📝 **Observability**: Comprehensive tracing, metrics, and Grafana dashboards
 - 🧪 **Testable**: Mock destinations and comprehensive test utilities
@@ -53,10 +53,9 @@ rigatoni/
 ### Core Concepts
 
 - **Source**: Extract data from systems (MongoDB change streams)
-- **Transform**: Process and enrich data with type-safe transformations
 - **Destination**: Load data into target systems (S3 with multiple formats)
-- **Store**: Manage pipeline state for reliability (in-memory, file, Redis)
-- **Pipeline**: Orchestrate the entire ETL workflow with error handling
+- **Store**: Manage pipeline state for reliability (in-memory, Redis)
+- **Pipeline**: Orchestrate the entire data replication workflow with error handling
 
 ## 🚀 Quick Start
 
@@ -73,7 +72,7 @@ Add Rigatoni to your `Cargo.toml`:
 [dependencies]
 rigatoni-core = "0.1"
 rigatoni-destinations = { version = "0.1", features = ["s3"] }
-rigatoni-stores = { version = "0.1", features = ["redis-store"] }
+rigatoni-stores = { version = "0.1", features = ["memory"] }
 ```
 
 ### Basic Example: MongoDB to S3 Pipeline
@@ -81,9 +80,13 @@ rigatoni-stores = { version = "0.1", features = ["redis-store"] }
 ```rust
 use rigatoni_core::pipeline::{Pipeline, PipelineConfig};
 use rigatoni_destinations::s3::{S3Config, S3Destination};
+use rigatoni_stores::memory::MemoryStore;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Configure state store (in-memory for simplicity)
+    let store = MemoryStore::new();
+
     // Configure S3 destination
     let s3_config = S3Config::builder()
         .bucket("my-data-lake")
@@ -95,15 +98,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure pipeline
     let config = PipelineConfig::builder()
-        .mongodb_uri("mongodb://localhost:27017")
+        .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
         .database("mydb")
         .collections(vec!["users", "orders"])
         .batch_size(1000)
         .build()?;
 
-    // Run pipeline
-    let mut pipeline = Pipeline::new(config, destination).await?;
-    pipeline.run().await?;
+    // Create and run pipeline
+    let mut pipeline = Pipeline::new(config, store, destination).await?;
+    pipeline.start().await?;
 
     Ok(())
 }
@@ -140,14 +143,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Configure pipeline with Redis store
     let config = PipelineConfig::builder()
-        .mongodb_uri("mongodb://localhost:27017")
+        .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
         .database("mydb")
         .collections(vec!["users", "orders"])
         .build()?;
 
-    // Run pipeline with distributed state
-    let mut pipeline = Pipeline::with_store(config, destination, store).await?;
-    pipeline.run().await?;
+    // Create and run pipeline with distributed state
+    let mut pipeline = Pipeline::new(config, store, destination).await?;
+    pipeline.start().await?;
 
     Ok(())
 }
@@ -191,27 +194,20 @@ See [Observability Guide](docs/OBSERVABILITY.md) for Prometheus setup, Grafana d
 
 ## 📚 Documentation
 
-**Getting Started:**
-- [Getting Started Guide](https://valeriouberti.github.io/rigatoni/getting-started) - Quick start guide and tutorials
-- [Examples](examples/README.md) - Comprehensive examples guide with runnable code
-  - [Core Examples](rigatoni-core/examples/README.md) - Pipeline, metrics, change streams
-  - [Destination Examples](rigatoni-destinations/examples/README.md) - S3, compression, partitioning
-- [Local Development Guide](docs/guides/local-development.md) - Complete local setup with Docker Compose
+### Quick Start
+- **[Getting Started Guide](https://valeriouberti.github.io/rigatoni/getting-started)** - Installation, setup, and your first pipeline
+- **[Examples](examples/README.md)** - Runnable examples with complete setup instructions
+- **[Local Development](docs/guides/local-development.md)** - Complete local environment with Docker Compose
 
-**Architecture & Design:**
-- [Architecture Guide](https://valeriouberti.github.io/rigatoni/architecture) - System design and concepts
-- [Observability Guide](docs/OBSERVABILITY.md) - Metrics, monitoring, and alerting
-- [API Reference](https://docs.rs/rigatoni) - Complete API documentation
+### Guides
+- **[Architecture Guide](https://valeriouberti.github.io/rigatoni/architecture)** - System design and core concepts
+- **[Observability Guide](docs/OBSERVABILITY.md)** - Metrics, monitoring, and Grafana dashboards
+- **[User Guides](https://valeriouberti.github.io/rigatoni/guides/)** - S3 configuration, Redis setup, production deployment
+- **[API Reference](https://docs.rs/rigatoni)** - Complete API documentation
 
-**Guides:**
-- [User Guides](https://valeriouberti.github.io/rigatoni/guides/) - Task-specific guides
-- [Redis Configuration](docs/guides/redis-configuration.md) - Production state store setup
-- [S3 Configuration](docs/guides/s3-configuration.md) - Data lake best practices
-
-**Developer Documentation:**
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute
-- [CI/CD Guide](.github/CI_GUIDE.md) - Development workflow
-- [Workspace Guide](docs/README-WORKSPACE.md) - Workspace structure and dependencies
+### Contributing
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute to Rigatoni
+- **[CI/CD Guide](.github/CI_GUIDE.md)** - Development workflow and automation
 
 ## 🛠️ Development
 
@@ -277,7 +273,7 @@ Quick checklist:
 
 ## 📝 License
 
-Rigatoni is dual-licensed under MIT OR Apache-2.0.
+Rigatoni is licensed under the Apache License 2.0.
 
 ## 📧 Contact
 

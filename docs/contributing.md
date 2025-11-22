@@ -604,7 +604,7 @@ Contributors will be:
 
 ## License
 
-By contributing to Rigatoni, you agree that your contributions will be licensed under the MIT OR Apache-2.0 dual license.
+By contributing to Rigatoni, you agree that your contributions will be licensed under the Apache License 2.0.
 
 ---
 

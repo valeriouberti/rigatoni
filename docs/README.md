@@ -2,6 +2,12 @@
 
 This directory contains the Rigatoni project documentation, published to GitHub Pages using Jekyll.
 
+> **📖 About This File**
+>
+> This README is a **meta-document for contributors** explaining how to work with the documentation system (Jekyll, GitHub Pages, etc.).
+>
+> **Users** should visit the published documentation at [valeriouberti.github.io/rigatoni](https://valeriouberti.github.io/rigatoni) or view [index.md](index.md) for the documentation landing page.
+
 ## Documentation Structure
 
 ```

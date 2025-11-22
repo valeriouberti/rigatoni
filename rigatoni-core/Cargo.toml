@@ -1,6 +1,6 @@
 [package]
 name = "rigatoni-core"
-description = "Core traits, pipeline orchestration, and MongoDB integration for Rigatoni ETL framework"
+description = "Core traits, pipeline orchestration, and MongoDB integration for Rigatoni CDC/Data Replication framework"
 readme = "README.md"
 
 # Inherit workspace metadata

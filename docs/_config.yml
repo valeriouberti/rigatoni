@@ -26,7 +26,7 @@ search:
   button: true
 
 # Footer
-footer_content: "Copyright &copy; 2025 Valerio Uberti. Distributed under MIT OR Apache-2.0 license."
+footer_content: "Copyright &copy; 2025 Valerio Uberti. Licensed under the Apache License 2.0."
 
 # GitHub
 gh_edit_link: true
