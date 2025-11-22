@@ -65,9 +65,9 @@ mockall = { workspace = true }
 tokio-test = { workspace = true }
 
 # For examples - need destinations and stores
-# Note: path-only dependencies in dev-dependencies to avoid circular dependency during publishing
-rigatoni-destinations = { path = "../rigatoni-destinations", features = ["s3", "gzip", "json"] }
-rigatoni-stores = { path = "../rigatoni-stores", features = ["memory", "redis-store"] }
+# Use compatible version range so docs.rs can find published versions
+rigatoni-destinations = { version = "0.1", path = "../rigatoni-destinations", features = ["s3", "gzip", "json"] }
+rigatoni-stores = { version = "0.1", path = "../rigatoni-stores", features = ["memory", "redis-store"] }
 
 [features]
 default = ["mongodb-source"]

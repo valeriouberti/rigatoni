@@ -248,6 +248,8 @@ jobs:
     needs: [ci-success]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write  # Required to create GitHub releases
 
     steps:
       - name: Checkout repository

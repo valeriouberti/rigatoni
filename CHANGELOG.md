@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2] - 2025-01-22
+
+### Fixed
+
+- **GitHub Release Permissions** - Added `permissions: contents: write` to release workflow to allow creating GitHub releases
+- **docs.rs Build** - Added version requirements to dev-dependencies in rigatoni-core for proper docs.rs documentation builds
+
+---
+
 ## [0.1.1] - 2025-01-22
 
 ### Fixed
@@ -45,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/valeriouberti/rigatoni/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/valeriouberti/rigatoni/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/valeriouberti/rigatoni/releases/tag/v0.1.0
