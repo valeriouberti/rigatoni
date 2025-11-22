@@ -37,7 +37,7 @@
 //! - **No durability** - Data lost on crash or shutdown
 //!
 //! For production deployments with multiple instances or high availability
-//! requirements, use [`RedisStore`](crate::redis::RedisStore) instead.
+//! requirements, use `RedisStore` (available with the `redis-store` feature) instead.
 //!
 //! # Example
 //!
