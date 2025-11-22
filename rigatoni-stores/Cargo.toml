@@ -1,6 +1,6 @@
 [package]
 name = "rigatoni-stores"
-description = "State store implementations for Rigatoni ETL: Memory, File, Redis for distributed state management"
+description = "State store implementations for Rigatoni CDC/Data Replication: Memory, File, Redis for distributed state management"
 readme = "README.md"
 
 # Inherit workspace metadata
