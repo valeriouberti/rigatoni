@@ -1,0 +1,112 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for Rigatoni
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please describe your idea below.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve? Is your feature request related to a problem?
+      placeholder: "Example: I'm always frustrated when I need to replicate data to multiple destinations but can only configure one..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like to see.
+      placeholder: "Example: Add support for multiple destinations in pipeline configuration, allowing fan-out to S3, Kafka, and BigQuery simultaneously..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature affect?
+      options:
+        - rigatoni-core (Pipeline/Events)
+        - rigatoni-destinations (New Destination)
+        - rigatoni-stores (State Store)
+        - New Crate
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Critical (blocking my use case)
+        - High (would significantly improve my workflow)
+        - Medium (nice to have)
+        - Low (minor enhancement)
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe your specific use case. How would you use this feature?
+      placeholder: |
+        I'm building a real-time analytics pipeline that needs to:
+        1. Send raw events to S3 for long-term storage
+        2. Send aggregated events to Kafka for downstream consumers
+        3. Send metrics to a time-series database
+    validations:
+      required: true
+
+  - type: textarea
+    id: api-design
+    attributes:
+      label: API Design (Optional)
+      description: If you have ideas about the API, share them here.
+      render: rust
+      placeholder: |
+        // Example API design
+        let pipeline = Pipeline::builder()
+            .source(mongodb_source)
+            .destinations(vec![
+                s3_destination,
+                kafka_destination,
+                timeseries_destination,
+            ])
+            .build()?;
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: "Example: Currently using multiple pipeline instances, but this requires running separate processes and managing state independently..."
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      description: Are you willing to contribute?
+      options:
+        - label: I'm willing to implement this feature and submit a PR
+          required: false
+        - label: I can help with testing/feedback
+          required: false
+        - label: I can help with documentation
+          required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, examples, or references that might help.
+      placeholder: "Links to similar features in other projects, academic papers, blog posts, etc."

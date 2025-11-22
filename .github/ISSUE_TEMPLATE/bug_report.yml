@@ -1,0 +1,152 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Rigatoni
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below to help us diagnose and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: "Example: Pipeline crashes when processing large batches with S3 destination..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: "Example: Pipeline should process batches of 10,000 events without crashing..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: "Example: Pipeline panics with 'thread panicked at src/pipeline.rs:234'..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue? Provide minimal code example if possible.
+      placeholder: |
+        1. Configure pipeline with batch_size=10000
+        2. Start pipeline with S3 destination
+        3. Insert 50,000 documents into MongoDB
+        4. Observe crash after ~5 batches
+      value: |
+        ```rust
+        // Paste your code here
+        ```
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - rigatoni-core (Pipeline/Events)
+        - rigatoni-destinations (S3/Destinations)
+        - rigatoni-stores (State Store)
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Rigatoni Version
+      description: What version of Rigatoni are you using?
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: rust-version
+    attributes:
+      label: Rust Version
+      description: Output of `rustc --version`
+      placeholder: "rustc 1.85.0 (stable)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant configuration (PipelineConfig, S3Config, etc.). Redact sensitive values.
+      render: rust
+      placeholder: |
+        PipelineConfig::builder()
+            .mongodb_uri("mongodb://...")
+            .database("mydb")
+            .collections(vec!["users"])
+            .batch_size(10000)
+            .build()?
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Stack Trace
+      description: Relevant log output or stack trace. Use RUST_BACKTRACE=1 for full trace.
+      render: shell
+      placeholder: |
+        thread 'tokio-runtime-worker' panicked at rigatoni-core/src/pipeline.rs:234:9:
+        called `Result::unwrap()` on an `Err` value: ...
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details
+      description: Additional environment information (MongoDB version, Redis version, AWS region, etc.)
+      placeholder: |
+        - MongoDB: 7.0.4 (replica set)
+        - Redis: 7.2.0
+        - AWS Region: us-east-1
+        - Docker: Yes/No
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: I have included a minimal reproducible example
+          required: false
+        - label: I have included relevant logs/stack traces
+          required: false
+        - label: I have tested with the latest version
+          required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or information that might help.

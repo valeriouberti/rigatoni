@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 GitHub Discussions
+    url: https://github.com/valeriouberti/rigatoni/discussions
+    about: Ask questions, share ideas, and discuss with the community
+  - name: 📖 Documentation
+    url: https://valeriouberti.github.io/rigatoni/
+    about: Browse the official documentation and guides
+  - name: 🔍 Search Existing Issues
+    url: https://github.com/valeriouberti/rigatoni/issues
+    about: Check if your issue has already been reported

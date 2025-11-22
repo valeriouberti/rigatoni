@@ -1,0 +1,74 @@
+name: Question / Help
+description: Ask a question or request help with Rigatoni
+title: "[Question]: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question about using Rigatoni? We're here to help!
+
+        **💡 Tip:** For discussions and general questions, consider using [GitHub Discussions](https://github.com/valeriouberti/rigatoni/discussions) instead.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What would you like to know?
+      placeholder: "Example: How do I configure multiple MongoDB collections with different batch sizes?"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      description: What area does your question relate to?
+      options:
+        - Getting Started / Installation
+        - Configuration / Setup
+        - MongoDB Integration
+        - S3 Destination
+        - State Store / Redis
+        - Performance / Optimization
+        - Production Deployment
+        - Metrics / Monitoring
+        - Error Handling
+        - Architecture / Design
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide context about what you're trying to achieve.
+      placeholder: |
+        I'm building a pipeline that needs to:
+        - Replicate 5 MongoDB collections to S3
+        - Each collection has different throughput characteristics
+        - Need to optimize batch sizes per collection
+
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What Have You Tried?
+      description: What solutions have you already attempted?
+      placeholder: |
+        I tried:
+        1. Setting global batch_size=1000
+        2. Checking documentation for per-collection configuration
+        3. Looking at examples in the repo
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have checked the [documentation](https://valeriouberti.github.io/rigatoni/)
+          required: true
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: This is not a bug report (use Bug Report template instead)
+          required: true
