@@ -1,0 +1,12 @@
+[package]
+name = "license-header"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rigatoni Contributors"]
+license = "Apache-2.0"
+description = "Tool to apply Apache 2.0 license headers to Rust source files"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+walkdir = "2.5"
+regex = "1.10"

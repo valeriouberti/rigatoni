@@ -40,6 +40,5 @@ localstack_data/
 
 # Examples, docs, and tools (from your original)
 internal-docs/
-tools
-HEADER
+*/*/target/
 .claude/
