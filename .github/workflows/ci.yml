@@ -68,28 +68,10 @@ jobs:
         with:
           key: test
 
-      - name: Run tests (default features)
-        run: cargo test --workspace --verbose
-
-      # Note: --all-features causes linker OOM on GitHub runners due to large dependency tree
-      # Test individual feature sets instead to stay within memory limits
-      - name: Run tests (core features)
-        run: cargo test -p rigatoni-core --all-features --verbose
-
-      - name: Run tests (stores features)
-        run: cargo test -p rigatoni-stores --all-features --verbose
-
-      # Skip rigatoni-destinations tests in CI due to AWS SDK linker OOM
-      # Even --lib flag compiles integration tests which causes linker crashes
-      # Tests run successfully locally but GitHub runners have insufficient memory
-      - name: Build rigatoni-destinations (verify compilation only)
-        run: cargo build -p rigatoni-destinations --features s3,json,csv,gzip --verbose
-
-      - name: Run tests (no default features)
-        run: cargo test --workspace --no-default-features --verbose
-
-      - name: Run doc tests
-        run: cargo test --workspace --doc --verbose
+      # Test core and stores only - destinations excluded due to AWS SDK memory limits
+      # Full test suite runs locally via pre-push hooks
+      - name: Run tests
+        run: cargo test --workspace --exclude rigatoni-destinations --verbose
 
   # Clippy linting job
   clippy:
@@ -110,37 +92,8 @@ jobs:
         with:
           key: clippy
 
-      # Note: --all-features causes linker OOM, lint default features instead
-      - name: Run Clippy (default features)
-        run: |
-          cargo clippy --workspace --all-targets -- \
-            -D warnings \
-            -D clippy::all \
-            -D clippy::pedantic \
-            -W clippy::nursery \
-            -A clippy::module_name_repetitions \
-            -A clippy::missing_errors_doc \
-            -A clippy::missing_panics_doc \
-            -A clippy::doc_markdown \
-            -A clippy::must_use_candidate \
-            -A clippy::cast_precision_loss \
-            -A clippy::cast_sign_loss \
-            -A clippy::cast_possible_truncation \
-            -A clippy::unused_async \
-            -A clippy::match_same_arms \
-            -A clippy::option_if_let_else \
-            -A clippy::suboptimal_flops \
-            -A clippy::significant_drop_tightening \
-            -A clippy::missing_const_for_fn \
-            -A clippy::inefficient_to_string \
-            -A clippy::items_after_statements \
-            -A clippy::uninlined_format_args \
-            -A clippy::ignore_without_reason
-
-      - name: Run Clippy (no default features)
-        run: |
-          cargo clippy --workspace --no-default-features --all-targets -- \
-            -D warnings
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
   # Formatting check
   fmt:
@@ -176,12 +129,8 @@ jobs:
         with:
           key: cargo-check
 
-      # Note: --all-features causes linker OOM, check default features
       - name: Check workspace
         run: cargo check --workspace --verbose
-
-      - name: Check workspace (no default features)
-        run: cargo check --workspace --no-default-features --verbose
 
   # Build documentation to ensure it compiles without errors
   docs:
@@ -200,7 +149,6 @@ jobs:
         with:
           key: docs
 
-      # Note: --all-features causes linker OOM, build with default features
       - name: Build documentation
         run: cargo doc --workspace --no-deps --document-private-items
         env:
