@@ -156,6 +156,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+⚠️ **Scaling Limitation:** When running multiple instances with Redis, **each instance MUST watch different collections**. Multiple instances watching the same collection will cause duplicate processing due to lack of distributed locking. See [Production Deployment Guide](https://valeriouberti.github.io/rigatoni/guides/production-deployment#multi-instance-deployment) for details.
+
+```rust
+// ✅ Safe: Different collections per instance
+// Instance 1
+.collections(vec!["users", "orders"])
+
+// Instance 2
+.collections(vec!["products", "inventory"])
+
+// ❌ Unsafe: Same collection causes duplicates
+// Instance 1 and 2 both watching "users"
+```
+
 See [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) for detailed tutorials and [Redis Configuration Guide](https://valeriouberti.github.io/rigatoni/guides/redis-configuration) for production deployment.
 
 ### Metrics and Monitoring

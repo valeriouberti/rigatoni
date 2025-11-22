@@ -171,18 +171,58 @@ fn init_logging() {
                       └───────────┘
 ```
 
+⚠️ **CRITICAL LIMITATION: Same-Collection Constraint**
+
+Multiple pipeline instances **MUST NOT** watch the same collection simultaneously. This will cause:
+
+- ❌ **Duplicate event processing** - All instances receive all events
+- ❌ **Resume token race conditions** - Last write wins, leading to data loss on restart
+- ❌ **No distributed locking** - Redis store uses simple SET (no SETNX or Redlock)
+
+**Supported Configuration:**
+```rust
+// Instance 1
+.collections(vec!["users".to_string(), "comments".to_string()])
+
+// Instance 2
+.collections(vec!["orders".to_string(), "payments".to_string()])
+
+// Instance 3
+.collections(vec!["products".to_string(), "inventory".to_string()])
+```
+
+**NOT Supported (Will Cause Duplicates):**
+```rust
+// ❌ Both instances watching "users" - DUPLICATES!
+// Instance 1
+.collections(vec!["users".to_string()])
+
+// Instance 2
+.collections(vec!["users".to_string()])  // ← Same collection!
+```
+
+**Workaround for High-Volume Collections:**
+
+For collections that need more than one instance:
+1. Use MongoDB sharding to split the collection
+2. Deploy separate Rigatoni instances per shard
+3. Configure each instance to watch different shard ranges
+
+See [internal-docs/issues/multi-instance-same-collection-support.md](../../internal-docs/issues/multi-instance-same-collection-support.md) for planned distributed locking support.
+
 **Pros:**
-- Horizontal scaling
+- Horizontal scaling by collection partitioning
 - Fault isolation per instance
 - Can dedicate resources per collection
 
 **Cons:**
 - More complex coordination
 - Higher operational overhead
+- Cannot scale single high-volume collections without MongoDB sharding
 
 **Best for:**
 - High volume (> 10,000 events/sec)
-- Critical production workloads
+- Critical production workloads with many collections
 - Need for high availability
 
 ---

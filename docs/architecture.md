@@ -409,6 +409,22 @@ Run multiple pipeline instances with:
 - Different collections per instance
 - Shared state store (Redis) for coordination
 
+⚠️ **Important Limitation:** Multiple instances **MUST watch different collections**. The current Redis state store implementation does not include distributed locking, so multiple instances watching the same collection will cause:
+- Duplicate event processing (all instances receive all events)
+- Resume token race conditions (last write wins)
+- Potential data loss on restart
+
+**Safe horizontal scaling pattern:**
+```rust
+// Instance 1
+.collections(vec!["users".to_string(), "orders".to_string()])
+
+// Instance 2
+.collections(vec!["products".to_string(), "inventory".to_string()])
+```
+
+See [Production Deployment Guide](guides/production-deployment.md#multi-instance-deployment) for details.
+
 **Vertical Scaling:**
 
 - Increase `num_workers` for more parallelism

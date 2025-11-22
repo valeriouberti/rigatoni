@@ -24,6 +24,29 @@ Learn how to configure Redis for distributed state management across multiple pi
 
 The Redis state store enables distributed state management for Rigatoni pipelines, allowing multiple pipeline instances to share resume tokens and coordinate processing across collections.
 
+⚠️ **IMPORTANT LIMITATION: No Distributed Locking**
+
+While Redis state store supports multiple pipeline instances, **different instances MUST watch different collections**. The current implementation does NOT include distributed locking, which means:
+
+- ❌ **Multiple instances on the same collection will cause duplicate processing**
+- ❌ **Resume token race conditions** - Last write wins (simple SET, no SETNX)
+- ❌ **No coordination for concurrent writes**
+
+**Safe Multi-Instance Pattern:**
+```rust
+// Instance 1 - watches users and orders
+let config1 = PipelineConfig::builder()
+    .collections(vec!["users".to_string(), "orders".to_string()])
+    .build()?;
+
+// Instance 2 - watches products (different collections)
+let config2 = PipelineConfig::builder()
+    .collections(vec!["products".to_string()])
+    .build()?;
+```
+
+See [Production Deployment Guide](production-deployment.md#multi-instance-deployment) for details and [internal-docs/issues/multi-instance-same-collection-support.md](../../internal-docs/issues/multi-instance-same-collection-support.md) for planned distributed locking support.
+
 **Key Features:**
 - **Connection pooling** - Efficient connection management with deadpool-redis
 - **Automatic retries** - Exponential backoff for transient failures
