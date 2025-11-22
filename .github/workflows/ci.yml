@@ -264,14 +264,15 @@ jobs:
       - name: Verify version in Cargo.toml matches tag
         run: |
           TAG_VERSION=${GITHUB_REF#refs/tags/v}
-          CARGO_VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          # Extract version from [workspace.package] section
+          CARGO_VERSION=$(awk '/\[workspace\.package\]/{flag=1} flag && /^version =/{print; exit}' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
 
           echo "Tag version: $TAG_VERSION"
           echo "Cargo.toml version: $CARGO_VERSION"
 
           if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
             echo "❌ Version mismatch!"
-            echo "Git tag version (v$TAG_VERSION) does not match Cargo.toml version ($CARGO_VERSION)"
+            echo "Git tag version (v$TAG_VERSION) does not match Cargo.toml workspace version ($CARGO_VERSION)"
             exit 1
           fi
 
@@ -323,5 +324,5 @@ jobs:
             ## 📚 Documentation
 
             - [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started)
-            - [API Documentation](https://docs.rs/rigatoni)
+            - [API Documentation](https://docs.rs/rigatoni-core)
             - [Changelog](https://github.com/valeriouberti/rigatoni/blob/main/CHANGELOG.md)

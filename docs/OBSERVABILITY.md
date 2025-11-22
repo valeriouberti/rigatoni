@@ -53,7 +53,7 @@ Rigatoni uses three types of metrics:
 All metrics include relevant labels for filtering and aggregation:
 
 - `collection`: MongoDB collection name
-- `destination_type`: Destination type (s3, bigquery, kafka)
+- `destination_type`: Destination type (currently only s3 in 0.1.1)
 - `operation`: Operation type (insert, update, delete)
 - `error_type`: Error category (timeout_error, connection_error, etc.)
 
@@ -516,10 +516,9 @@ rate(rigatoni_change_stream_lag_seconds_count[5m])
 
 **Debug**:
 ```bash
-# Test destination connectivity manually
-awslocal s3 ls s3://your-bucket/  # for S3
-# or
-bq ls your-dataset  # for BigQuery
+# Test S3 destination connectivity manually
+awslocal s3 ls s3://your-bucket/  # for S3 (LocalStack)
+aws s3 ls s3://your-bucket/       # for AWS S3
 ```
 
 #### High Memory Usage

@@ -28,7 +28,7 @@ Production-ready destination implementations for streaming data from MongoDB to 
 
 ```toml
 [dependencies]
-rigatoni-destinations = { version = "0.1", features = ["s3", "json"] }
+rigatoni-destinations = { version = "0.1.1", features = ["s3", "json"] }
 ```
 
 ### Available Features

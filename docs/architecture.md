@@ -531,8 +531,9 @@ async fn process_batch(&self, collection: String, events: Vec<ChangeEvent>) {
 
 ### Planned Features
 
+- **BigQuery Destination** - Google Cloud data warehouse integration
+- **Kafka Destination** - Event streaming platform integration
 - **Dead Letter Queue** - Failed events for manual review
-- **Metrics Export** - Prometheus/OpenTelemetry integration
 - **Schema Evolution** - Automatic schema migration
 - **Exactly-Once Semantics** - Transactional destinations
 - **Filtering** - Event filtering before batching

@@ -17,7 +17,7 @@ categories.workspace = true
 
 [dependencies]
 # Core crate dependency
-rigatoni-core = { version = "0.1", path = "../rigatoni-core" }
+rigatoni-core = { version = "0.1.1", path = "../rigatoni-core" }
 
 # Async runtime
 tokio = { workspace = true }
@@ -73,6 +73,10 @@ optional = true
 [dependencies.rdkafka]
 workspace = true
 optional = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
 mockall = { workspace = true }

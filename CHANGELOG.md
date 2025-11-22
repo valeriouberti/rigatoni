@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.1] - 2025-01-22
+
+### Fixed
+
+- **Documentation Configuration** - Added `[package.metadata.docs.rs]` configuration to all crates for proper docs.rs builds
+- **Documentation URL** - Fixed workspace documentation URL to point to `rigatoni-core` instead of non-existent `rigatoni` crate
+- **Dependency Versions** - Updated all inter-crate dependencies to use explicit version numbers (0.1.1) for crates.io compatibility
+
+### Changed
+
+- All crates now build documentation with all features enabled on docs.rs
+- Updated installation examples in README files to reference version 0.1.1
+
+---
+
 ## [0.1.0] - 2025-11-22
 
 ### Added
@@ -30,5 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/valeriouberti/rigatoni/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/valeriouberti/rigatoni/releases/tag/v0.1.0

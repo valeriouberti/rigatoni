@@ -40,9 +40,9 @@ Add Rigatoni to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rigatoni-core = "0.1"
-rigatoni-destinations = { version = "0.1", features = ["s3"] }
-rigatoni-stores = { version = "0.1", features = ["memory"] }
+rigatoni-core = "0.1.1"
+rigatoni-destinations = { version = "0.1.1", features = ["s3"] }
+rigatoni-stores = { version = "0.1.1", features = ["memory"] }
 ```
 
 ### Your First Pipeline
@@ -91,7 +91,7 @@ Rigatoni is organized as a workspace with three main crates:
 ### Core Components
 
 - **rigatoni-core** - Core traits, pipeline orchestration, and MongoDB integration
-- **rigatoni-destinations** - Destination implementations (S3, BigQuery, Kafka, etc.)
+- **rigatoni-destinations** - Destination implementations (S3 available, BigQuery and Kafka coming soon)
 - **rigatoni-stores** - State store implementations for checkpoint/resume
 
 ### Pipeline Flow

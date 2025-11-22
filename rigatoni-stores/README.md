@@ -36,7 +36,7 @@ State store implementations for persisting MongoDB change stream resume tokens, 
 
 ```toml
 [dependencies]
-rigatoni-stores = { version = "0.1", features = ["memory", "file", "redis-store"] }
+rigatoni-stores = { version = "0.1.1", features = ["memory", "file", "redis-store"] }
 ```
 
 ### Available Features

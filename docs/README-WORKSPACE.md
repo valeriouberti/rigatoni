@@ -21,17 +21,17 @@ Rigatoni is organized as a Cargo workspace with three member crates, each servin
 - `metrics-export`: Prometheus metrics export
 
 ### 2. rigatoni-destinations
-**Purpose**: Destination implementations (S3, BigQuery, Kafka, etc.)
+**Purpose**: Destination implementations (currently S3, with BigQuery and Kafka planned)
 
 **Key Dependencies** (feature-gated):
 - `aws-sdk-s3`: S3 destination (enabled by `s3` feature)
-- `gcp-bigquery-client`: BigQuery destination (enabled by `bigquery` feature)
-- `rdkafka`: Kafka destination (enabled by `kafka` feature)
-- `csv`, `parquet`, `avro-rs`: Format support (feature-gated)
+- `csv`, `parquet`, `apache-avro`: Format support (feature-gated)
+- `flate2`, `zstd`: Compression support (feature-gated)
 
 **Features**:
 - `default = ["s3", "json", "csv"]`: Common destinations
-- `all-destinations`: Enable all cloud/streaming destinations
+- `s3`: AWS S3 destination (available in 0.1.1)
+- `json`, `csv`, `parquet`, `avro`: Serialization formats
 - `all-formats`: Enable all serialization formats
 - `compression`: gzip and zstd compression support
 
@@ -79,7 +79,7 @@ Workspace-level package metadata (`version`, `authors`, `license`, etc.) is inhe
 
 ```toml
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["..."]
 # ... etc
@@ -182,7 +182,7 @@ Not used extensively, but `"~1.40"` means:
 4. **Production Efficiency**: Deploy only required destinations
    ```toml
    [dependencies]
-   rigatoni-destinations = { version = "0.1", features = ["s3", "kafka"] }
+   rigatoni-destinations = { version = "0.1.1", features = ["s3", "json"] }
    ```
 
 ### Feature Flag Patterns
@@ -192,7 +192,8 @@ Most features are additive (don't break existing functionality):
 ```toml
 [features]
 s3 = ["aws-config", "aws-sdk-s3"]  # Adds S3 support
-bigquery = ["gcp-bigquery-client"]  # Adds BigQuery support
+json = []  # Adds JSON format support
+csv = ["dep:csv"]  # Adds CSV format support
 ```
 
 #### Optional Dependencies
@@ -207,7 +208,7 @@ optional = true  # Only compiled if 's3' feature enabled
 Meta-features for common combinations:
 ```toml
 [features]
-all-destinations = ["s3", "bigquery", "kafka"]
+all-destinations = ["s3"]  # Currently only S3 is implemented
 all-formats = ["json", "csv", "parquet", "avro"]
 all = ["all-destinations", "all-formats", "compression"]
 ```

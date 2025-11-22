@@ -21,7 +21,7 @@ The complete Rust API documentation is hosted on **docs.rs**:
 ### Core Crates
 
 - **[rigatoni-core](https://docs.rs/rigatoni-core)** - Core traits, pipeline orchestration, and MongoDB integration
-- **[rigatoni-destinations](https://docs.rs/rigatoni-destinations)** - Destination implementations (S3, BigQuery, Kafka)
+- **[rigatoni-destinations](https://docs.rs/rigatoni-destinations)** - Destination implementations (S3 available in 0.1.1)
 - **[rigatoni-stores](https://docs.rs/rigatoni-stores)** - State store implementations
 
 ---

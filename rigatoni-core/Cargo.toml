@@ -56,13 +56,17 @@ schemars = { workspace = true }
 # Random for jitter
 rand = { workspace = true }
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dev-dependencies]
 mockall = { workspace = true }
 tokio-test = { workspace = true }
 
 # For examples - need destinations and stores
-rigatoni-destinations = { path = "../rigatoni-destinations", features = ["s3", "gzip", "json"] }
-rigatoni-stores = { path = "../rigatoni-stores", features = ["memory", "redis-store"] }
+rigatoni-destinations = { version = "0.1.1", path = "../rigatoni-destinations", features = ["s3", "gzip", "json"] }
+rigatoni-stores = { version = "0.1.1", path = "../rigatoni-stores", features = ["memory", "redis-store"] }
 
 [features]
 default = ["mongodb-source"]

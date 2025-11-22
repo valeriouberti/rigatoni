@@ -70,9 +70,9 @@ Add Rigatoni to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rigatoni-core = "0.1"
-rigatoni-destinations = { version = "0.1", features = ["s3"] }
-rigatoni-stores = { version = "0.1", features = ["memory"] }
+rigatoni-core = "0.1.1"
+rigatoni-destinations = { version = "0.1.1", features = ["s3"] }
+rigatoni-stores = { version = "0.1.1", features = ["memory"] }
 ```
 
 ### Basic Example: MongoDB to S3 Pipeline

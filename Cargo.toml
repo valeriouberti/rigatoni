@@ -7,14 +7,14 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.85"
 authors = ["Valerio Uberti <valeriouberti@icloud.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/valeriouberti/rigatoni"
 homepage = "https://github.com/valeriouberti/rigatoni"
-documentation = "https://docs.rs/rigatoni"
+documentation = "https://docs.rs/rigatoni-core"
 keywords = ["cdc", "data-replication", "change-data-capture", "pipeline", "streaming"]
 categories = ["database", "asynchronous", "data-structures"]
 
