@@ -29,6 +29,7 @@ rigatoni-core = "0.1"
 
 ```rust
 use rigatoni_core::pipeline::{Pipeline, PipelineConfig};
+use rigatoni_stores::memory::MemoryStore;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -39,9 +40,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .batch_size(1000)
         .build()?;
 
+    let store = MemoryStore::new();
     let destination = /* your destination */;
-    let mut pipeline = Pipeline::new(config, destination).await?;
-    pipeline.run().await?;
+    let mut pipeline = Pipeline::new(config, store, destination).await?;
+    pipeline.start().await?;
 
     Ok(())
 }
