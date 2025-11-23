@@ -115,16 +115,3 @@ all = ["all-destinations", "all-formats", "compression"]
 [lib]
 name = "rigatoni_destinations"
 path = "src/lib.rs"
-
-# Examples require specific features
-[[example]]
-name = "s3_basic"
-required-features = ["s3"]
-
-[[example]]
-name = "s3_advanced"
-required-features = ["s3", "parquet", "avro"]
-
-[[example]]
-name = "s3_with_compression"
-required-features = ["s3", "gzip", "zstandard"]

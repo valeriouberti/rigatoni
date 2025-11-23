@@ -55,23 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bucket = env::var("S3_BUCKET").unwrap_or_else(|_| "rigatoni-test-bucket".to_string());
 
-    // Determine format based on features
-    #[cfg(feature = "parquet")]
+    // Use Parquet format for best analytics performance
     let format = SerializationFormat::Parquet;
-    #[cfg(all(feature = "csv", not(feature = "parquet")))]
-    let format = SerializationFormat::Csv;
-    #[cfg(all(feature = "avro", not(any(feature = "parquet", feature = "csv"))))]
-    let format = SerializationFormat::Avro;
-    #[cfg(not(any(feature = "parquet", feature = "csv", feature = "avro")))]
-    let format = SerializationFormat::Json;
 
-    // Determine compression
-    #[cfg(feature = "zstandard")]
+    // Use Zstandard compression for best compression ratio and speed
     let compression = Compression::Zstd;
-    #[cfg(all(feature = "gzip", not(feature = "zstandard")))]
-    let compression = Compression::Gzip;
-    #[cfg(not(any(feature = "gzip", feature = "zstandard")))]
-    let compression = Compression::None;
 
     println!("Configuration:");
     println!("  Bucket: {}", bucket);

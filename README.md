@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml/badge.svg)](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust Version](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org/)
 
 > A high-performance, type-safe CDC/Data Replication framework for Rust, focused on real-time data pipelines.
 
@@ -61,7 +61,7 @@ rigatoni/
 
 ### Prerequisites
 
-- Rust 1.85 or later
+- Rust 1.88 or later
 - AWS credentials configured for S3 access
 
 ### Installation

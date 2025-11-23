@@ -32,7 +32,7 @@ Be respectful, inclusive, and professional in all interactions. We're here to bu
 
 ### Prerequisites
 
-- **Rust 1.85+** - [Install Rust](https://www.rust-lang.org/tools/install)
+- **Rust 1.88+** - [Install Rust](https://www.rust-lang.org/tools/install)
 - **Git** - [Install Git](https://git-scm.com/downloads)
 - **MongoDB** - For testing (or use Docker)
 - **LocalStack** - For S3 testing (optional)

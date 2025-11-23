@@ -53,7 +53,7 @@ Before you begin, ensure you have:
 
 - **Docker** (20.10+) - [Install Docker](https://docs.docker.com/get-docker/)
 - **Docker Compose** (v2.0+) - Included with Docker Desktop
-- **Rust** (1.85+) - [Install Rust](https://rustup.rs/)
+- **Rust** (1.88+) - [Install Rust](https://rustup.rs/)
 - **awslocal** (optional but recommended) - `pip install awscli-local`
 
 ### Verify Installation
@@ -66,7 +66,7 @@ docker compose version
 # Docker Compose version v2.20.0 or later
 
 rustc --version
-# rustc 1.85.0 or later
+# rustc 1.88.0 or later
 ```
 
 ---

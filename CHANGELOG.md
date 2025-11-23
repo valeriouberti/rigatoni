@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.3] - 2025-01-22
+
+### Fixed
+
+- **docs.rs Build** - Moved examples to separate unpublished workspace crate to eliminate circular dev-dependency issues that prevented docs.rs from building documentation
+- **MSRV Declaration** - Updated `rust-version` to 1.88 to match AWS SDK S3 requirements (was incorrectly set to 1.85)
+
+### Changed
+
+- **Minimum Rust Version** - Updated MSRV from 1.85 to 1.88 due to AWS SDK S3 dependency requirements
+- **Examples Architecture** - Moved integration examples to `examples/` workspace crate (unpublished) for cleaner dependency management
+  - Examples can now use all rigatoni crates together without circular dependencies
+  - Run examples with: `cargo run --example <name> -p rigatoni-examples`
+  - Published crates no longer include examples, reducing package size
+
+---
+
 ## [0.1.2] - 2025-01-22
 
 ### Fixed
@@ -54,7 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/valeriouberti/rigatoni/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/valeriouberti/rigatoni/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/valeriouberti/rigatoni/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/valeriouberti/rigatoni/releases/tag/v0.1.0
