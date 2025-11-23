@@ -1,6 +1,6 @@
 [package]
 name = "rigatoni-destinations"
-description = "Destination implementations for Rigatoni CDC/Data Replication: S3, BigQuery, Kafka, and more"
+description = "Destination implementations for Rigatoni CDC/Data Replication: S3 with multiple formats and compression"
 readme = "README.md"
 
 # Inherit workspace metadata
@@ -42,9 +42,6 @@ chrono = { workspace = true }
 # UUID
 uuid = { workspace = true }
 
-# HTTP client for API-based destinations
-reqwest = { workspace = true }
-
 # Serialization formats (optional, enabled by features)
 csv = { workspace = true, optional = true }
 parquet = { workspace = true, optional = true }
@@ -65,16 +62,6 @@ optional = true
 workspace = true
 optional = true
 
-# Google BigQuery (optional, enabled by bigquery feature)
-[dependencies.gcp-bigquery-client]
-workspace = true
-optional = true
-
-# Kafka (optional, enabled by kafka feature)
-[dependencies.rdkafka]
-workspace = true
-optional = true
-
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -91,10 +78,6 @@ default = ["s3", "json", "csv"]
 
 # Cloud storage destinations
 s3 = ["aws-config", "aws-sdk-s3"]
-bigquery = ["gcp-bigquery-client"]
-
-# Streaming destinations
-kafka = ["rdkafka", "avro"]
 
 # File format support
 json = []
@@ -103,28 +86,14 @@ parquet = ["dep:parquet", "dep:arrow-schema", "dep:arrow-array"]
 avro = ["dep:apache-avro"]
 
 # Compression support
-compression = ["flate2", "zstd"]
+compression = ["gzip", "zstandard"]
 gzip = ["flate2"]
 zstandard = ["zstd"]
 
-# All destinations (useful for testing and development)
-all-destinations = ["s3", "bigquery", "kafka"]
+# All formats and compression (useful for testing and development)
 all-formats = ["json", "csv", "parquet", "avro"]
-all = ["all-destinations", "all-formats", "compression"]
+all = ["s3", "all-formats", "compression"]
 
 [lib]
 name = "rigatoni_destinations"
 path = "src/lib.rs"
-
-# Examples require specific features
-[[example]]
-name = "s3_basic"
-required-features = ["s3"]
-
-[[example]]
-name = "s3_advanced"
-required-features = ["s3", "parquet", "avro"]
-
-[[example]]
-name = "s3_with_compression"
-required-features = ["s3", "gzip", "zstandard"]

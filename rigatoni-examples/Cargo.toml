@@ -1,0 +1,55 @@
+[package]
+name = "rigatoni-examples"
+version = "0.1.3"
+edition = "2021"
+license = "Apache-2.0"
+publish = false  # CRITICAL: Never publish this to crates.io
+
+[dependencies]
+# All rigatoni crates can be used together here without circular dependency issues
+rigatoni-core = { path = "../rigatoni-core" }
+rigatoni-destinations = { path = "../rigatoni-destinations", features = ["s3", "gzip", "zstandard", "json", "parquet", "avro"] }
+rigatoni-stores = { path = "../rigatoni-stores", features = ["memory", "redis-store"] }
+
+# Other dependencies needed for examples
+tokio = { version = "1.40", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+anyhow = "1.0"
+bson = "2.15"
+mongodb = "3.3"
+chrono = "0.4"
+
+# Optional: metrics for metrics example
+metrics-exporter-prometheus = { version = "0.17", optional = true }
+
+[features]
+metrics-export = ["rigatoni-core/metrics-export", "metrics-exporter-prometheus"]
+
+# Each example is defined here
+[[example]]
+name = "simple_pipeline_memory"
+path = "simple_pipeline_memory.rs"
+
+[[example]]
+name = "change_stream_listener"
+path = "change_stream_listener.rs"
+
+[[example]]
+name = "metrics_prometheus"
+path = "metrics_prometheus.rs"
+required-features = ["metrics-export"]
+
+[[example]]
+name = "s3_basic"
+path = "s3_basic.rs"
+
+[[example]]
+name = "s3_with_compression"
+path = "s3_with_compression.rs"
+
+[[example]]
+name = "s3_advanced"
+path = "s3_advanced.rs"

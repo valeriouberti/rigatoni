@@ -26,7 +26,7 @@ Learn how to install Rigatoni and build your first data pipeline in minutes.
 
 Before you begin, ensure you have the following installed:
 
-- **Rust 1.85 or later** - [Install Rust](https://www.rust-lang.org/tools/install)
+- **Rust 1.88 or later** - [Install Rust](https://www.rust-lang.org/tools/install)
 - **MongoDB** - For the source (local or remote instance)
 - **AWS credentials** - For S3 destination (or LocalStack for testing)
 
@@ -34,10 +34,10 @@ Before you begin, ensure you have the following installed:
 
 ```bash
 rustc --version
-# Should output: rustc 1.85.0 (or later)
+# Should output: rustc 1.88.0 (or later)
 
 cargo --version
-# Should output: cargo 1.85.0 (or later)
+# Should output: cargo 1.88.0 (or later)
 ```
 
 ---

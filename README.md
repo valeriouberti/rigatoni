@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml/badge.svg)](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust Version](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org/)
 
 > A high-performance, type-safe CDC/Data Replication framework for Rust, focused on real-time data pipelines.
 
@@ -61,7 +61,7 @@ rigatoni/
 
 ### Prerequisites
 
-- Rust 1.85 or later
+- Rust 1.88 or later
 - AWS credentials configured for S3 access
 
 ### Installation
@@ -210,7 +210,7 @@ See [Observability Guide](docs/OBSERVABILITY.md) for Prometheus setup, Grafana d
 
 ### Quick Start
 - **[Getting Started Guide](https://valeriouberti.github.io/rigatoni/getting-started)** - Installation, setup, and your first pipeline
-- **[Examples](examples/README.md)** - Runnable examples with complete setup instructions
+- **[Examples](rigatoni-examples/README.md)** - Runnable examples with complete setup instructions
 - **[Local Development](docs/guides/local-development.md)** - Complete local environment with Docker Compose
 
 ### Guides

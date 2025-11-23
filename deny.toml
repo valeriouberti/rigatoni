@@ -5,7 +5,14 @@
 version = 2
 db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-ignore = []
+# Ignored advisories with justification
+ignore = [
+    # RUSTSEC-2024-0436: paste crate is unmaintained
+    # This is a transitive dependency through parquet/arrow crates
+    # The paste crate is still functional and widely used in the ecosystem
+    # Will be resolved when arrow/parquet updates their dependencies
+    "RUSTSEC-2024-0436",
+]
 
 [licenses]
 version = 2

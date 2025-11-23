@@ -233,7 +233,7 @@ See [internal-docs/issues/multi-instance-same-collection-support.md](../../inter
 
 ```dockerfile
 # Build stage
-FROM rust:1.85 as builder
+FROM rust:1.88 as builder
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./

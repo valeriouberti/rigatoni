@@ -178,12 +178,10 @@ rigatoni_core
 
 ```
 rigatoni_destinations
-├── s3              - S3 destination
-│   ├── destination - S3Destination impl
-│   ├── config      - S3Config and builder
-│   └── key_gen     - Key generation strategies
-├── bigquery        - BigQuery destination (coming soon)
-└── kafka           - Kafka destination (coming soon)
+└── s3              - S3 destination
+    ├── destination - S3Destination impl
+    ├── config      - S3Config and builder
+    └── key_gen     - Key generation strategies
 ```
 
 ### rigatoni-stores

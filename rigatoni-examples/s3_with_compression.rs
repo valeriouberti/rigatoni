@@ -48,13 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bucket = env::var("S3_BUCKET").unwrap_or_else(|_| "rigatoni-test-bucket".to_string());
 
-    // Determine compression based on features
-    #[cfg(feature = "zstandard")]
+    // Use Zstandard compression for best performance
     let compression = Compression::Zstd;
-    #[cfg(all(feature = "gzip", not(feature = "zstandard")))]
-    let compression = Compression::Gzip;
-    #[cfg(not(any(feature = "gzip", feature = "zstandard")))]
-    let compression = Compression::None;
 
     println!("Configuration:");
     println!("  Bucket: {}", bucket);
@@ -92,19 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Lower bandwidth usage");
     println!("  - Faster uploads for large batches");
 
-    match compression {
-        Compression::None => {
-            println!("\n💡 Tip: Enable gzip or zstd features for compression!");
-        }
-        #[cfg(feature = "gzip")]
-        Compression::Gzip => {
-            println!("\n📊 Gzip: ~70-80% compression ratio (industry standard)");
-        }
-        #[cfg(feature = "zstandard")]
-        Compression::Zstd => {
-            println!("\n📊 Zstd: ~75-85% compression ratio (faster than gzip!)");
-        }
-    }
+    println!("\n📊 Zstd: ~75-85% compression ratio (faster than gzip!)");
+    println!("\n💡 You can also use Compression::Gzip or Compression::None");
 
     destination.close().await?;
     println!("\n✓ Example completed!");

@@ -23,16 +23,12 @@
 //! # Available Destinations
 //!
 //! - **S3**: AWS S3 and S3-compatible storage (MinIO, LocalStack)
-//! - **BigQuery**: Google BigQuery (coming soon)
-//! - **Kafka**: Apache Kafka (coming soon)
 //!
 //! # Features
 //!
-//! Destinations are enabled via Cargo features:
+//! Destinations and formats are enabled via Cargo features:
 //!
 //! - `s3` - AWS S3 destination (default)
-//! - `bigquery` - Google BigQuery destination
-//! - `kafka` - Apache Kafka destination
 //! - `json` - JSON serialization support (default)
 //! - `csv` - CSV serialization support (default)
 //! - `parquet` - Apache Parquet serialization support
