@@ -4,7 +4,7 @@ members = [
     "rigatoni-core",
     "rigatoni-destinations",
     "rigatoni-stores",
-    "examples",  # Unpublished examples crate
+    "rigatoni-examples",  # Unpublished examples crate
 ]
 
 [workspace.package]
@@ -47,12 +47,6 @@ bson = "2.15"
 aws-config = "1.8"
 aws-sdk-s3 = "1.112"
 
-# Google Cloud BigQuery
-gcp-bigquery-client = "0.27"
-
-# Kafka client for streaming destinations
-rdkafka = { version = "0.38", features = ["tokio"] }
-
 # Redis for distributed state management
 redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 deadpool-redis = "0.18"
@@ -62,9 +56,6 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # UUID generation for correlation IDs
 uuid = { version = "1.10", features = ["v4", "serde"] }
-
-# Configuration management
-config = "0.14"
 
 # Testing utilities
 mockall = "0.13"
@@ -87,9 +78,6 @@ zstd = "0.13"
 
 # HTTP client for webhooks and APIs
 reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
-
-# CLI utilities (for potential CLI tools)
-clap = { version = "4.5", features = ["derive"] }
 
 # Concurrency primitives
 parking_lot = "0.12"

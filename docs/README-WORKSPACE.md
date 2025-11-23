@@ -21,7 +21,7 @@ Rigatoni is organized as a Cargo workspace with three member crates, each servin
 - `metrics-export`: Prometheus metrics export
 
 ### 2. rigatoni-destinations
-**Purpose**: Destination implementations (currently S3, with BigQuery and Kafka planned)
+**Purpose**: Destination implementations (currently S3 only)
 
 **Key Dependencies** (feature-gated):
 - `aws-sdk-s3`: S3 destination (enabled by `s3` feature)
@@ -281,7 +281,7 @@ cargo check
 cargo clean && cargo build --release
 ```
 - **Expected**: 5-10 minutes (depending on features)
-- **Dominated by**: AWS SDK, parquet, rdkafka
+- **Dominated by**: AWS SDK, parquet
 
 #### Incremental Build
 ```bash

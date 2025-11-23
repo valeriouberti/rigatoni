@@ -1,6 +1,6 @@
 # rigatoni-destinations
 
-Destination implementations for Rigatoni CDC/Data Replication framework - write data to S3, BigQuery, Kafka, and more.
+Destination implementations for Rigatoni CDC/Data Replication framework - write data to S3 and other targets.
 
 [![Crates.io](https://img.shields.io/crates/v/rigatoni-destinations.svg)](https://crates.io/crates/rigatoni-destinations)
 [![Documentation](https://docs.rs/rigatoni-destinations/badge.svg)](https://docs.rs/rigatoni-destinations)
@@ -12,17 +12,12 @@ Production-ready destination implementations for streaming data from MongoDB to 
 
 ## Supported Destinations
 
-### AWS S3 (Available)
+### AWS S3
 
 - **Multiple Formats**: JSON, CSV, Parquet, Avro
 - **Compression**: Gzip, Zstandard
 - **Partitioning**: Hive-style, date-based, collection-based
 - **Features**: Retry logic, S3-compatible storage (LocalStack, MinIO)
-
-### Coming Soon
-
-- **Google BigQuery** - Data warehouse integration
-- **Apache Kafka** - Event streaming
 
 ## Installation
 
@@ -35,8 +30,6 @@ rigatoni-destinations = { version = "0.1.1", features = ["s3", "json"] }
 
 **Destinations:**
 - `s3` - AWS S3 (enabled by default)
-- `bigquery` - Google BigQuery (coming soon)
-- `kafka` - Apache Kafka (coming soon)
 
 **Formats:**
 - `json` - JSON/JSONL (enabled by default)
@@ -49,9 +42,8 @@ rigatoni-destinations = { version = "0.1.1", features = ["s3", "json"] }
 - `zstandard` - Zstandard compression
 
 **Convenience:**
-- `all-destinations` - All destination implementations
 - `all-formats` - All serialization formats
-- `all` - Everything
+- `all` - All features (S3 + all formats + compression)
 
 ## Quick Start - S3 Destination
 
@@ -127,7 +119,7 @@ use rigatoni_destinations::s3::KeyGenerationStrategy;
 
 ## Examples
 
-See the [examples](examples/) directory:
+See the [rigatoni-examples](../rigatoni-examples/) directory:
 
 - `s3_basic` - Basic S3 usage
 - `s3_advanced` - Advanced features (formats, compression, partitioning)

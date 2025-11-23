@@ -210,7 +210,7 @@ See [Observability Guide](docs/OBSERVABILITY.md) for Prometheus setup, Grafana d
 
 ### Quick Start
 - **[Getting Started Guide](https://valeriouberti.github.io/rigatoni/getting-started)** - Installation, setup, and your first pipeline
-- **[Examples](examples/README.md)** - Runnable examples with complete setup instructions
+- **[Examples](rigatoni-examples/README.md)** - Runnable examples with complete setup instructions
 - **[Local Development](docs/guides/local-development.md)** - Complete local environment with Docker Compose
 
 ### Guides
