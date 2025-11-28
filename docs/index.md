@@ -137,6 +137,7 @@ Capture all database changes for audit and replay:
 
 - **[Getting Started](getting-started)** - Installation, setup, and your first pipeline
 - **[Architecture](architecture)** - System design and core concepts
+- **[Performance & Benchmarks](performance)** - Comprehensive performance analysis
 - **[User Guides](guides/)** - Task-specific guides and examples
 - **[API Reference](https://docs.rs/rigatoni)** - Complete API documentation
 - **[Contributing](contributing)** - Contribution guidelines

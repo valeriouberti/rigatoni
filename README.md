@@ -7,6 +7,7 @@
 [![CI](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml/badge.svg)](https://github.com/valeriouberti/rigatoni/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust Version](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org/)
+[![Benchmarks](https://img.shields.io/badge/benchmarks-view%20results-brightgreen)](https://valeriouberti.github.io/rigatoni/performance)
 
 > A high-performance, type-safe CDC/Data Replication framework for Rust, focused on real-time data pipelines.
 
@@ -24,6 +25,18 @@ Rigatoni is a modern CDC (Change Data Capture) and data replication framework bu
 - **Async-first design** - Powered by Tokio for high throughput
 - **Type-safe transformations** - Compile-time guarantees with Rust's type system
 - **Modular architecture** - Extensible with feature flags
+
+## ⚡ Performance
+
+Rigatoni delivers exceptional performance for high-throughput CDC workloads:
+
+- **~780ns per event** - Core processing with linear scaling
+- **~1.2μs per event** - JSON serialization
+- **7.65ms for 1000 events** - S3 writes with ZSTD compression
+- **10K-100K events/sec** - Production-ready throughput
+- **Sub-millisecond** - State store operations
+
+See our [detailed benchmarks](https://valeriouberti.github.io/rigatoni/performance) for comprehensive performance analysis.
 
 ## ✨ Features
 
