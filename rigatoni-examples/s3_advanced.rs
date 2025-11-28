@@ -29,6 +29,8 @@
 //!
 //! # Running
 //!
+//! ## With AWS S3
+//!
 //! ```bash
 //! # With all features
 //! cargo run --example s3_advanced --all-features
@@ -38,12 +40,20 @@
 //! cargo run --example s3_advanced --features s3,parquet,zstandard
 //! cargo run --example s3_advanced --features s3,avro
 //! ```
+//!
+//! ## With LocalStack (for testing)
+//!
+//! ```bash
+//! docker-compose up -d localstack
+//! USE_LOCALSTACK=1 cargo run --example s3_advanced --all-features
+//! ```
 
 use chrono::Utc;
 use rigatoni_core::destination::Destination;
 use rigatoni_core::event::{ChangeEvent, Namespace, OperationType};
 use rigatoni_destinations::s3::{
-    Compression, KeyGenerationStrategy, S3Config, S3Destination, SerializationFormat,
+    AwsCredentials, Compression, KeyGenerationStrategy, S3Config, S3Destination,
+    SerializationFormat,
 };
 use std::env;
 
@@ -53,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("=== Advanced S3 Destination Example ===\n");
 
+    let use_localstack = env::var("USE_LOCALSTACK").is_ok();
     let bucket = env::var("S3_BUCKET").unwrap_or_else(|_| "rigatoni-test-bucket".to_string());
 
     // Use Parquet format for best analytics performance
@@ -65,18 +76,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Bucket: {}", bucket);
     println!("  Format: {:?}", format);
     println!("  Compression: {:?}", compression);
-    println!("  Partitioning: Hive-style (for analytics)\n");
+    println!("  Partitioning: Hive-style (for analytics)");
+    if use_localstack {
+        println!("  Mode: LocalStack (testing)");
+    }
+    println!();
 
     // Create advanced configuration with Hive partitioning
-    let config = S3Config::builder()
+    let mut config_builder = S3Config::builder()
         .bucket(bucket)
         .region("us-east-1")
         .prefix("analytics/mongodb-cdc")
         .format(format)
         .compression(compression)
         .key_strategy(KeyGenerationStrategy::HivePartitioned)
-        .max_retries(5) // Increased retries for production
-        .build()?;
+        .max_retries(5); // Increased retries for production
+
+    if use_localstack {
+        config_builder = config_builder
+            .endpoint_url("http://localhost:4566")
+            .force_path_style(true)
+            .credentials(AwsCredentials::new("test", "test"));
+    }
+
+    let config = config_builder.build()?;
 
     println!("📁 Key Generation Strategy:");
     println!("  Pattern: {}", config.key_strategy.pattern_description());
