@@ -126,6 +126,19 @@ impl S3Destination {
         let mut aws_config_builder = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .region(aws_config::Region::new(config.region.clone()));
 
+        // Configure explicit credentials if provided
+        if let Some(ref creds) = config.credentials {
+            debug!("Using explicit AWS credentials");
+            let aws_creds = aws_sdk_s3::config::Credentials::new(
+                &creds.access_key_id,
+                &creds.secret_access_key,
+                creds.session_token.clone(),
+                None,
+                "rigatoni-s3-destination",
+            );
+            aws_config_builder = aws_config_builder.credentials_provider(aws_creds);
+        }
+
         // Configure custom endpoint if specified (for LocalStack, MinIO, etc.)
         if let Some(endpoint_url) = &config.endpoint_url {
             debug!("Using custom S3 endpoint: {}", endpoint_url);

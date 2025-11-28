@@ -26,9 +26,24 @@
 //!
 //! # Running
 //!
+//! ## With AWS S3
+//!
 //! ```bash
 //! # Set your S3 bucket name
 //! export S3_BUCKET="your-bucket-name"
+//!
+//! # Run the example
+//! cargo run --example s3_basic --features s3,json
+//! ```
+//!
+//! ## With LocalStack (for testing)
+//!
+//! ```bash
+//! # Start LocalStack
+//! docker-compose up -d localstack
+//!
+//! # Set LocalStack flag
+//! export USE_LOCALSTACK=1
 //!
 //! # Run the example
 //! cargo run --example s3_basic --features s3,json
@@ -37,7 +52,7 @@
 use chrono::Utc;
 use rigatoni_core::destination::Destination;
 use rigatoni_core::event::{ChangeEvent, Namespace, OperationType};
-use rigatoni_destinations::s3::{S3Config, S3Destination};
+use rigatoni_destinations::s3::{AwsCredentials, S3Config, S3Destination};
 use std::env;
 
 #[tokio::main]
@@ -47,17 +62,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("=== Basic S3 Destination Example ===\n");
 
+    // Check if we should use LocalStack
+    let use_localstack = env::var("USE_LOCALSTACK").is_ok();
+
     // Get bucket name from environment
     let bucket = env::var("S3_BUCKET").unwrap_or_else(|_| "rigatoni-test-bucket".to_string());
 
-    println!("Using S3 bucket: {}\n", bucket);
+    println!("Using S3 bucket: {}", bucket);
+    if use_localstack {
+        println!("Mode: LocalStack (testing)\n");
+    } else {
+        println!("Mode: AWS S3 (production)\n");
+    }
 
     // Create S3 configuration with minimal settings
-    let config = S3Config::builder()
+    let mut config_builder = S3Config::builder()
         .bucket(&bucket)
         .region("us-east-1")
-        .prefix("rigatoni/examples/basic")
-        .build()?;
+        .prefix("rigatoni/examples/basic");
+
+    // Configure for LocalStack if requested
+    if use_localstack {
+        config_builder = config_builder
+            .endpoint_url("http://localhost:4566")
+            .force_path_style(true)
+            .credentials(AwsCredentials::new("test", "test"));
+    }
+
+    let config = config_builder.build()?;
 
     println!("Configuration:");
     println!("  Bucket: {}", config.bucket);

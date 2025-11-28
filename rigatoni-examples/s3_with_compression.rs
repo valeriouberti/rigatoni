@@ -26,6 +26,8 @@
 //!
 //! # Running
 //!
+//! ## With AWS S3
+//!
 //! ```bash
 //! # With gzip compression
 //! cargo run --example s3_with_compression --features s3,json,gzip
@@ -33,11 +35,18 @@
 //! # With zstd compression (better compression ratio)
 //! cargo run --example s3_with_compression --features s3,json,zstandard
 //! ```
+//!
+//! ## With LocalStack (for testing)
+//!
+//! ```bash
+//! docker-compose up -d localstack
+//! USE_LOCALSTACK=1 cargo run --example s3_with_compression --features s3,json,zstandard
+//! ```
 
 use chrono::Utc;
 use rigatoni_core::destination::Destination;
 use rigatoni_core::event::{ChangeEvent, Namespace, OperationType};
-use rigatoni_destinations::s3::{Compression, S3Config, S3Destination};
+use rigatoni_destinations::s3::{AwsCredentials, Compression, S3Config, S3Destination};
 use std::env;
 
 #[tokio::main]
@@ -46,6 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("=== S3 Destination with Compression Example ===\n");
 
+    let use_localstack = env::var("USE_LOCALSTACK").is_ok();
     let bucket = env::var("S3_BUCKET").unwrap_or_else(|_| "rigatoni-test-bucket".to_string());
 
     // Use Zstandard compression for best performance
@@ -53,15 +63,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Configuration:");
     println!("  Bucket: {}", bucket);
-    println!("  Compression: {:?}\n", compression);
+    println!("  Compression: {:?}", compression);
+    if use_localstack {
+        println!("  Mode: LocalStack (testing)");
+    }
+    println!();
 
     // Create configuration with compression
-    let config = S3Config::builder()
+    let mut config_builder = S3Config::builder()
         .bucket(bucket)
         .region("us-east-1")
         .prefix("rigatoni/examples/compressed")
-        .compression(compression)
-        .build()?;
+        .compression(compression);
+
+    if use_localstack {
+        config_builder = config_builder
+            .endpoint_url("http://localhost:4566")
+            .force_path_style(true)
+            .credentials(AwsCredentials::new("test", "test"));
+    }
+
+    let config = config_builder.build()?;
 
     let mut destination = S3Destination::new(config).await?;
 

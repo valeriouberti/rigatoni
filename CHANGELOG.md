@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.4] - 2025-11-28
+
+### Added
+
+- **Comprehensive Benchmarks** - Added `rigatoni-benches` package with extensive performance benchmarks
+  - Batch processing benchmarks (optimal batch size, creation, serialization)
+  - S3 destination benchmarks (format comparison, compression, concurrent writes)
+  - Pipeline throughput benchmarks (state store performance, latency simulation)
+  - Benchmark results available at: https://valeriouberti.github.io/rigatoni/performance
+- **Performance Documentation** - New comprehensive performance guide at `docs/performance.md`
+  - Detailed benchmark analysis and results
+  - Production configuration recommendations
+  - Performance optimization checklist
+  - Troubleshooting and tuning guide
+- **Benchmark Workflow** - GitHub Actions workflow for automated benchmarking
+  - Manual trigger only (workflow_dispatch)
+  - LocalStack integration for S3 benchmarks
+  - Criterion HTML reports as artifacts
+  - Results publishing to GitHub Pages
+- **Performance Highlights** - Added performance metrics section to README
+  - Prominently displays key performance characteristics
+  - ~780ns per event processing
+  - 10K-100K events/sec throughput
+
+### Changed
+
+- **Documentation** - Enhanced main documentation with performance section
+  - Added "Performance & Benchmarks" to documentation navigation
+  - Performance badge in README linking to benchmark results
+  - Updated rigatoni-benches README with documentation link
+
+### Fixed
+
+- **Benchmark Code Quality** - Fixed Clippy warnings in benchmark code
+  - Removed unused enumerate in batch processing
+  - Replaced `iter().cloned().collect()` with `.to_vec()`
+  - Removed unused methods in mock destinations
+
+---
+
 ## [0.1.3] - 2025-01-22
 
 ### Fixed
@@ -71,7 +111,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/valeriouberti/rigatoni/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/valeriouberti/rigatoni/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/valeriouberti/rigatoni/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/valeriouberti/rigatoni/compare/v0.1.0...v0.1.1

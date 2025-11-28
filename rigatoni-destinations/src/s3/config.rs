@@ -191,6 +191,46 @@ impl Compression {
     }
 }
 
+/// AWS credentials for S3 access.
+///
+/// Used primarily for testing with LocalStack or other S3-compatible services.
+/// In production, prefer using IAM roles or the AWS credential chain.
+#[derive(Debug, Clone)]
+pub struct AwsCredentials {
+    /// AWS Access Key ID
+    pub access_key_id: String,
+    /// AWS Secret Access Key
+    pub secret_access_key: String,
+    /// Optional session token for temporary credentials
+    pub session_token: Option<String>,
+}
+
+impl AwsCredentials {
+    /// Creates new AWS credentials.
+    #[must_use]
+    pub fn new(access_key_id: impl Into<String>, secret_access_key: impl Into<String>) -> Self {
+        Self {
+            access_key_id: access_key_id.into(),
+            secret_access_key: secret_access_key.into(),
+            session_token: None,
+        }
+    }
+
+    /// Creates new AWS credentials with a session token.
+    #[must_use]
+    pub fn with_session_token(
+        access_key_id: impl Into<String>,
+        secret_access_key: impl Into<String>,
+        session_token: impl Into<String>,
+    ) -> Self {
+        Self {
+            access_key_id: access_key_id.into(),
+            secret_access_key: secret_access_key.into(),
+            session_token: Some(session_token.into()),
+        }
+    }
+}
+
 /// Configuration for S3 destination.
 ///
 /// # Examples
@@ -219,6 +259,21 @@ impl Compression {
 ///     .prefix("events")
 ///     .compression(Compression::Zstd)
 ///     .key_strategy(KeyGenerationStrategy::HivePartitioned)
+///     .build()
+///     .unwrap();
+/// ```
+///
+/// ## LocalStack with explicit credentials
+///
+/// ```rust,ignore
+/// use rigatoni_destinations::s3::{S3Config, AwsCredentials};
+///
+/// let config = S3Config::builder()
+///     .bucket("test-bucket")
+///     .region("us-east-1")
+///     .endpoint_url("http://localhost:4566")
+///     .force_path_style(true)
+///     .credentials(AwsCredentials::new("test", "test"))
 ///     .build()
 ///     .unwrap();
 /// ```
@@ -264,6 +319,12 @@ pub struct S3Config {
     ///
     /// Required for: LocalStack, MinIO
     pub force_path_style: bool,
+
+    /// Optional explicit credentials (for testing/LocalStack).
+    ///
+    /// If not provided, the AWS SDK will use the default credential chain
+    /// (environment variables, instance profiles, etc.).
+    pub credentials: Option<AwsCredentials>,
 }
 
 impl Default for S3Config {
@@ -278,6 +339,7 @@ impl Default for S3Config {
             max_retries: 3,
             endpoint_url: None,
             force_path_style: false,
+            credentials: None,
         }
     }
 }
@@ -296,6 +358,7 @@ pub struct S3ConfigBuilder {
     max_retries: Option<u32>,
     endpoint_url: Option<String>,
     force_path_style: Option<bool>,
+    credentials: Option<AwsCredentials>,
 }
 
 impl S3ConfigBuilder {
@@ -385,6 +448,29 @@ impl S3ConfigBuilder {
         self
     }
 
+    /// Sets explicit AWS credentials (for testing/LocalStack).
+    ///
+    /// If not provided, the AWS SDK will use the default credential chain.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use rigatoni_destinations::s3::{S3Config, AwsCredentials};
+    ///
+    /// // LocalStack credentials
+    /// let config = S3Config::builder()
+    ///     .bucket("test-bucket")
+    ///     .region("us-east-1")
+    ///     .endpoint_url("http://localhost:4566")
+    ///     .credentials(AwsCredentials::new("test", "test"))
+    ///     .build()?;
+    /// ```
+    #[must_use]
+    pub fn credentials(mut self, credentials: AwsCredentials) -> Self {
+        self.credentials = Some(credentials);
+        self
+    }
+
     /// Builds the `S3Config`.
     ///
     /// # Errors
@@ -465,6 +551,7 @@ impl S3ConfigBuilder {
             max_retries: self.max_retries.unwrap_or(3),
             endpoint_url: self.endpoint_url,
             force_path_style: self.force_path_style.unwrap_or(false),
+            credentials: self.credentials,
         })
     }
 }

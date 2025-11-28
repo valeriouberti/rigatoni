@@ -1,0 +1,95 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Start LocalStack (for S3 benchmarks)
+        run: |
+          docker run -d --name localstack \
+            -p 4566:4566 \
+            -e SERVICES=s3 \
+            localstack/localstack:latest
+
+          # Wait for LocalStack to be ready
+          timeout 60 sh -c 'until docker logs localstack 2>&1 | grep -q "Ready."; do sleep 1; done'
+
+      - name: Configure AWS for LocalStack
+        run: |
+          aws configure set aws_access_key_id test
+          aws configure set aws_secret_access_key test
+          aws configure set region us-east-1
+
+          # Create S3 bucket for benchmarks
+          aws --endpoint-url=http://localhost:4566 s3 mb s3://benchmark-bucket || true
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+
+      - name: Run benchmarks
+        run: |
+          cargo bench --package rigatoni-benches -- --output-format bencher | tee benchmark_results.txt
+        env:
+          AWS_ENDPOINT_URL: http://localhost:4566
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: Rigatoni Benchmarks
+          tool: 'cargo'
+          output-file-path: benchmark_results.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # Store results in gh-pages branch
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: benchmarks
+
+      - name: Upload criterion reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: criterion-reports
+          path: target/criterion/
+          retention-days: 30
+

@@ -1,0 +1,51 @@
+[package]
+name = "rigatoni-benches"
+version = "0.1.4"
+edition = "2021"
+license = "Apache-2.0"
+publish = false  # CRITICAL: Never publish this to crates.io
+
+[dependencies]
+# All rigatoni crates
+rigatoni-core = { path = "../rigatoni-core" }
+rigatoni-destinations = { path = "../rigatoni-destinations", features = ["s3", "gzip", "zstandard", "json", "parquet", "avro"] }
+rigatoni-stores = { path = "../rigatoni-stores", features = ["memory", "redis-store"] }
+
+# Runtime and async
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+bson = { workspace = true }
+
+# AWS SDK for S3 benchmarks with localstack
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+
+# Time handling
+chrono = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "s3_destination"
+harness = false
+
+[[bench]]
+name = "pipeline_throughput"
+harness = false
+
+[[bench]]
+name = "batch_processing"
+harness = false
