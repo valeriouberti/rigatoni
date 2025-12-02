@@ -97,10 +97,12 @@ Pure event processing demonstrates excellent linear scaling:
 | JSON + ZSTD | 7.58 ms | baseline | ✅ **Production** (best compression/speed) |
 | JSON + GZIP | 8.77 ms | +16% | ✅ Compatibility with legacy systems |
 | JSON (uncompressed) | 11.79 ms | +56% | ⚠️ Development/testing only |
-| Parquet | 12.36 ms | +63% | ⚠️ Analytics workloads (columnar) |
+| Parquet* | 12.36 ms | +63% | 🚧 **Not representative** (see note below) |
 | Avro | 11.46 ms | +51% | ⚠️ Schema evolution requirements |
 
 **Recommendation**: Use **JSON + ZSTD** for production. It's 33% faster than uncompressed JSON and 14% faster than GZIP.
+
+> **⚠️ Note on Parquet Performance**: The current Parquet implementation stores entire CDC events as JSON strings in a single column, which doesn't utilize Parquet's columnar benefits. This is a **simplified placeholder implementation**. Proper columnar Parquet (with individual columns for CDC metadata) is planned for v0.2.0 and should provide significantly better performance and compression (estimated 40-60% file size reduction). See [issue #XX](link) for details.
 
 ### Compression Benefits by Batch Size
 
@@ -109,9 +111,11 @@ Pure event processing demonstrates excellent linear scaling:
 | JSON (none) | 2.88 ms | 4.06 ms | 11.45 ms |
 | JSON + GZIP | 3.37 ms | 3.81 ms | 8.63 ms |
 | JSON + ZSTD | 3.71 ms | 3.81 ms | **7.65 ms** ⭐ |
-| Parquet | 3.81 ms | 4.05 ms | 12.38 ms |
+| Parquet* | 3.81 ms | 4.05 ms | 12.38 ms |
 
 **Insight**: Compression overhead is negligible for small batches, but provides significant benefits at 100+ events. ZSTD consistently outperforms other formats at scale.
+
+*Note: Parquet numbers are not representative of proper columnar format (see note above).
 
 ## Concurrency & Throughput
 
