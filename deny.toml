@@ -12,6 +12,13 @@ ignore = [
     # The paste crate is still functional and widely used in the ecosystem
     # Will be resolved when arrow/parquet updates their dependencies
     "RUSTSEC-2024-0436",
+
+    # RUSTSEC-2025-0134: rustls-pemfile is unmaintained
+    # This is a transitive dependency through:
+    # - aws-smithy-http-client -> hyper-rustls -> rustls-native-certs -> rustls-pemfile v1.0.4
+    # - testcontainers -> bollard -> rustls-pemfile v2.2.0
+    # No safe upgrade available; waiting for upstream dependencies to migrate to rustls-pki-types
+    "RUSTSEC-2025-0134",
 ]
 
 [licenses]

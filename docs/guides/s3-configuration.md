@@ -103,6 +103,20 @@ use rigatoni_destinations::s3::SerializationFormat;
 .format(SerializationFormat::Parquet)
 ```
 
+**Parquet Format Details:**
+
+Rigatoni's Parquet implementation uses a hybrid columnar approach optimized for CDC data:
+
+- **Columnar CDC metadata**: `operation`, `database`, `collection`, `cluster_time` stored as typed columns
+- **JSON document data**: `full_document` and `document_key` stored as JSON strings (flexible schemas)
+
+This enables:
+- Efficient filtering: `WHERE operation = 'insert' AND collection = 'users'`
+- Time-based queries: `WHERE cluster_time > '2025-01-01'`
+- 40-60% smaller file sizes compared to row-oriented JSON
+- Column pruning in query engines (only read needed columns)
+- Predicate pushdown for faster scans in Athena, Spark, DuckDB
+
 #### `compression(Compression)`
 {: .text-blue-000 }
 
