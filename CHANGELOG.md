@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Proper Columnar Parquet Serialization** - Rewrote Parquet serialization to use proper Arrow columnar format
+  - CDC metadata (`operation`, `database`, `collection`, `cluster_time`) stored as typed columns
+  - Document data (`full_document`, `document_key`) stored as JSON strings for schema flexibility
+  - Hybrid approach enables efficient filtering and predicate pushdown in query engines (Athena, Spark, DuckDB)
+  - 40-60% smaller file sizes compared to row-oriented JSON storage
+  - Pre-allocated Arrow builders for optimal memory performance
+  - Snappy compression enabled by default with dictionary encoding
+  - Page-level statistics for predicate pushdown optimization
+
+### Changed
+
+- **Performance Documentation** - Updated benchmark data with latest results
+  - Parquet now benchmarks at 8.00ms for 1000 events (only 6% slower than JSON+ZSTD)
+  - Updated all benchmark tables with fresh data
+  - Added Parquet to performance metrics summary
+- **S3 Configuration Guide** - Added detailed Parquet format documentation
+  - Explains hybrid columnar approach and its benefits
+  - Documents query optimization capabilities
+
+### Fixed
+
+- **Security Advisory Ignore** - Added `RUSTSEC-2025-0134` to `deny.toml` ignore list
+  - `rustls-pemfile` is unmaintained but is a transitive dependency from AWS SDK and testcontainers
+  - No safe upgrade available; waiting for upstream dependencies to migrate to `rustls-pki-types`
+
 ---
 
 ## [0.1.4] - 2025-11-28
