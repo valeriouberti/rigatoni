@@ -61,6 +61,7 @@ use crate::event::ChangeEvent;
 use crate::metrics;
 use crate::state::StateStore;
 use crate::stream::{ChangeStreamConfig, ChangeStreamListener};
+use crate::watch_level::WatchLevel;
 use futures::StreamExt;
 use mongodb::bson::Document;
 use std::future::Future;
@@ -81,8 +82,13 @@ pub struct PipelineConfig {
     /// Database name to watch
     pub database: String,
 
-    /// Collections to watch (empty = all collections)
-    pub collections: Vec<String>,
+    /// Scope of collections to watch.
+    ///
+    /// Determines whether to watch specific collections, the entire database,
+    /// or all databases in the deployment (cluster-wide).
+    ///
+    /// Default: [`WatchLevel::Database`] - watches all collections in the database.
+    pub watch_level: WatchLevel,
 
     /// Maximum number of events to batch before flushing
     pub batch_size: usize,
@@ -119,7 +125,7 @@ impl PipelineConfig {
 pub struct PipelineConfigBuilder {
     mongodb_uri: Option<String>,
     database: Option<String>,
-    collections: Vec<String>,
+    watch_level: Option<WatchLevel>,
     batch_size: usize,
     batch_timeout: Duration,
     max_retries: usize,
@@ -145,9 +151,125 @@ impl PipelineConfigBuilder {
     }
 
     /// Sets the collections to watch.
+    ///
+    /// # Deprecated
+    ///
+    /// This method is deprecated in favor of [`watch_collections`](Self::watch_collections).
+    /// It will continue to work but may be removed in a future release.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rigatoni_core::pipeline::PipelineConfig;
+    ///
+    /// // Deprecated usage:
+    /// #[allow(deprecated)]
+    /// let config = PipelineConfig::builder()
+    ///     .mongodb_uri("mongodb://localhost:27017")
+    ///     .database("mydb")
+    ///     .collections(vec!["users".to_string()])
+    ///     .build();
+    ///
+    /// // Recommended usage:
+    /// let config = PipelineConfig::builder()
+    ///     .mongodb_uri("mongodb://localhost:27017")
+    ///     .database("mydb")
+    ///     .watch_collections(vec!["users".to_string()])
+    ///     .build();
+    /// ```
     #[must_use]
+    #[deprecated(since = "0.2.0", note = "Use watch_collections() instead")]
     pub fn collections(mut self, collections: Vec<String>) -> Self {
-        self.collections = collections;
+        self.watch_level = Some(WatchLevel::Collection(collections));
+        self
+    }
+
+    /// Watch specific collections only.
+    ///
+    /// This creates a separate change stream worker for each collection,
+    /// enabling parallel processing. Use this when you know exactly which
+    /// collections to monitor.
+    ///
+    /// # Arguments
+    ///
+    /// * `collections` - List of collection names to watch
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rigatoni_core::pipeline::PipelineConfig;
+    ///
+    /// let config = PipelineConfig::builder()
+    ///     .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    ///     .database("mydb")
+    ///     .watch_collections(vec!["users".to_string(), "orders".to_string()])
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn watch_collections(mut self, collections: Vec<String>) -> Self {
+        self.watch_level = Some(WatchLevel::Collection(collections));
+        self
+    }
+
+    /// Watch all collections in the database.
+    ///
+    /// This creates a single change stream that monitors all collections
+    /// in the database. New collections are automatically included as
+    /// they are created.
+    ///
+    /// This is the recommended mode for most use cases, especially when:
+    /// - Collections are added/removed dynamically
+    /// - You want to capture all changes without maintaining a collection list
+    /// - The database has fewer than ~50 collections
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rigatoni_core::pipeline::PipelineConfig;
+    ///
+    /// let config = PipelineConfig::builder()
+    ///     .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    ///     .database("mydb")
+    ///     .watch_database()  // Watch all collections
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn watch_database(mut self) -> Self {
+        self.watch_level = Some(WatchLevel::Database);
+        self
+    }
+
+    /// Watch all databases in the deployment (cluster-wide).
+    ///
+    /// This creates a single change stream that monitors all databases
+    /// and collections in the MongoDB deployment. Use with caution as
+    /// this can generate very high event volume.
+    ///
+    /// # Requirements
+    ///
+    /// - MongoDB 4.0+
+    /// - Appropriate cluster-wide read permissions
+    ///
+    /// # Use Cases
+    ///
+    /// - Audit logging across entire cluster
+    /// - Multi-tenant setups with database-per-tenant
+    /// - Compliance and monitoring
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rigatoni_core::pipeline::PipelineConfig;
+    ///
+    /// let config = PipelineConfig::builder()
+    ///     .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    ///     .database("mydb")  // Still needed for state storage keys
+    ///     .watch_deployment()  // Watch all databases
+    ///     .build();
+    /// ```
+    #[must_use]
+    pub fn watch_deployment(mut self) -> Self {
+        self.watch_level = Some(WatchLevel::Deployment);
         self
     }
 
@@ -208,6 +330,9 @@ impl PipelineConfigBuilder {
     pub fn build(self) -> Result<PipelineConfig, ConfigError> {
         let mongodb_uri = self.mongodb_uri.ok_or(ConfigError::MissingMongoUri)?;
         let database = self.database.ok_or(ConfigError::MissingDatabase)?;
+
+        // Use default watch level (Database) if not specified
+        let watch_level = self.watch_level.unwrap_or_default();
 
         // Validate batch size
         let batch_size = match self.batch_size {
@@ -270,7 +395,7 @@ impl PipelineConfigBuilder {
         Ok(PipelineConfig {
             mongodb_uri,
             database,
-            collections: self.collections,
+            watch_level,
             batch_size,
             batch_timeout,
             max_retries: self.max_retries,
@@ -338,7 +463,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     ) -> Result<Self, PipelineError> {
         info!(
             database = %config.database,
-            collections = ?config.collections,
+            watch_level = %config.watch_level,
             batch_size = config.batch_size,
             batch_timeout = ?config.batch_timeout,
             "Creating pipeline"
@@ -355,7 +480,12 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         })
     }
 
-    /// Starts the pipeline, spawning workers for each collection.
+    /// Starts the pipeline, spawning workers based on the configured watch level.
+    ///
+    /// Depending on the [`WatchLevel`], this method will:
+    /// - **Collection**: Spawn one worker per collection (parallel processing)
+    /// - **Database**: Spawn a single worker watching all collections in the database
+    /// - **Deployment**: Spawn a single worker watching all databases in the deployment
     ///
     /// # Errors
     ///
@@ -363,6 +493,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     /// - The pipeline is already running
     /// - MongoDB connection fails
     /// - Worker spawn fails
+    /// - Empty collection list is provided with [`WatchLevel::Collection`]
     #[instrument(skip(self), fields(database = %self.config.database))]
     pub async fn start(&mut self) -> Result<(), PipelineError> {
         // Check if already running
@@ -371,41 +502,76 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             return Err(PipelineError::AlreadyRunning);
         }
 
-        // Early validation: watching all collections is not yet supported
-        if self.config.collections.is_empty() {
-            return Err(PipelineError::Configuration(
-                "Watching all collections is not yet implemented. \
-                 Please specify explicit collections in the configuration."
-                    .to_string(),
-            ));
-        }
-
-        info!("Starting pipeline");
+        info!(watch_level = %self.config.watch_level, "Starting pipeline");
 
         // Create shutdown channel (broadcast so all workers get the signal)
         let (shutdown_tx, _) = broadcast::channel(1);
         self.shutdown_tx = Some(shutdown_tx.clone());
 
-        let collections = self.config.collections.clone();
-        let num_collections = collections.len();
-
-        // Spawn worker for each collection
         let mut workers = self.workers.write().await;
-        for collection in collections {
-            let shutdown_rx = shutdown_tx.subscribe();
-            let worker = self
-                .spawn_collection_worker(collection.clone(), shutdown_rx)
-                .await?;
+        let mut num_workers = 0;
 
-            workers.push(worker);
+        match &self.config.watch_level {
+            WatchLevel::Collection(collections) => {
+                // Validate that at least one collection is specified
+                if collections.is_empty() {
+                    return Err(PipelineError::Configuration(
+                        "No collections specified. Either provide collection names with \
+                         watch_collections() or use watch_database() to watch all collections."
+                            .to_string(),
+                    ));
+                }
+
+                info!(
+                    collections = ?collections,
+                    "Starting collection-level watching"
+                );
+
+                // Spawn worker for each collection
+                for collection in collections {
+                    let shutdown_rx = shutdown_tx.subscribe();
+                    let worker = self
+                        .spawn_collection_worker(collection.clone(), shutdown_rx)
+                        .await?;
+
+                    workers.push(worker);
+                    num_workers += 1;
+                }
+
+                metrics::set_active_collections(collections.len());
+            }
+            WatchLevel::Database => {
+                info!(
+                    database = %self.config.database,
+                    "Starting database-level watching"
+                );
+
+                let shutdown_rx = shutdown_tx.subscribe();
+                let worker = self.spawn_database_worker(shutdown_rx).await?;
+                workers.push(worker);
+                num_workers = 1;
+
+                // For database-level, we report 1 "collection" (the database itself)
+                metrics::set_active_collections(1);
+            }
+            WatchLevel::Deployment => {
+                info!("Starting deployment-level watching (cluster-wide)");
+
+                let shutdown_rx = shutdown_tx.subscribe();
+                let worker = self.spawn_deployment_worker(shutdown_rx).await?;
+                workers.push(worker);
+                num_workers = 1;
+
+                // For deployment-level, we report 1 "collection" (the deployment itself)
+                metrics::set_active_collections(1);
+            }
         }
 
         *running = true;
-        info!(workers = workers.len(), "Pipeline started");
+        info!(workers = num_workers, "Pipeline started");
 
         // Update metrics
         metrics::set_pipeline_status(metrics::PipelineStatus::Running);
-        metrics::set_active_collections(num_collections);
 
         Ok(())
     }
@@ -421,28 +587,49 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         let destination = Arc::clone(&self.destination);
         let stats = Arc::clone(&self.stats);
 
-        let collection_name = if collection.is_empty() {
-            "all".to_string()
-        } else {
-            collection
-        };
-
         let handle = tokio::spawn(async move {
-            Self::collection_worker(
-                collection_name,
-                config,
-                store,
-                destination,
-                stats,
-                shutdown_rx,
-            )
-            .await
+            Self::collection_worker(collection, config, store, destination, stats, shutdown_rx)
+                .await
         });
 
         Ok(handle)
     }
 
-    /// Worker task that processes events for a collection.
+    /// Spawns a worker task for database-level watching.
+    async fn spawn_database_worker(
+        &self,
+        shutdown_rx: broadcast::Receiver<()>,
+    ) -> Result<WorkerHandle, PipelineError> {
+        let config = self.config.clone();
+        let store = Arc::clone(&self.store);
+        let destination = Arc::clone(&self.destination);
+        let stats = Arc::clone(&self.stats);
+
+        let handle = tokio::spawn(async move {
+            Self::database_worker(config, store, destination, stats, shutdown_rx).await
+        });
+
+        Ok(handle)
+    }
+
+    /// Spawns a worker task for deployment-level (cluster-wide) watching.
+    async fn spawn_deployment_worker(
+        &self,
+        shutdown_rx: broadcast::Receiver<()>,
+    ) -> Result<WorkerHandle, PipelineError> {
+        let config = self.config.clone();
+        let store = Arc::clone(&self.store);
+        let destination = Arc::clone(&self.destination);
+        let stats = Arc::clone(&self.stats);
+
+        let handle = tokio::spawn(async move {
+            Self::deployment_worker(config, store, destination, stats, shutdown_rx).await
+        });
+
+        Ok(handle)
+    }
+
+    /// Worker task that processes events for a specific collection.
     #[allow(clippy::too_many_lines)]
     #[instrument(skip(config, store, destination, stats, shutdown_rx), fields(collection = %collection))]
     async fn collection_worker(
@@ -455,9 +642,14 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     ) -> Result<(), PipelineError> {
         info!("Starting collection worker");
 
+        // Resume token key for this collection
+        let resume_token_key = config
+            .watch_level
+            .resume_token_key(&config.database, Some(&collection));
+
         // Get resume token from state store
         let resume_token = store
-            .get_resume_token(&collection)
+            .get_resume_token(&resume_token_key)
             .await
             .map_err(|e| PipelineError::StateStore(e.to_string()))?;
 
@@ -471,28 +663,17 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             .map_err(|e| PipelineError::MongoDB(e.to_string()))?;
 
         let db = client.database(&config.database);
-
-        // Get the collection to watch
-        let mongo_collection = if !collection.is_empty() && collection != "all" {
-            db.collection(&collection)
-        } else {
-            // Watch all collections in the database
-            // For now, we'll watch a specific collection - watching all is more complex
-            // TODO: Support watching entire database
-            return Err(PipelineError::Configuration(
-                "Watching all collections not yet implemented".to_string(),
-            ));
-        };
+        let mongo_collection = db.collection(&collection);
 
         // Create resume token callback that saves to state store
         let store_clone = Arc::clone(&store);
-        let collection_clone = collection.clone();
+        let resume_key = resume_token_key.clone();
         let resume_token_callback = move |token: Document| {
             let store = Arc::clone(&store_clone);
-            let coll = collection_clone.clone();
+            let key = resume_key.clone();
             Box::pin(async move {
                 store
-                    .save_resume_token(&coll, &token)
+                    .save_resume_token(&key, &token)
                     .await
                     .map_err(|e| e.to_string())
             }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
@@ -624,6 +805,441 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                         None => {
                             // Stream ended - shouldn't happen with MongoDB change streams
                             warn!("Change stream ended unexpectedly");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Worker task that processes events for an entire database.
+    ///
+    /// Uses MongoDB's `db.watch()` API to monitor all collections in the database.
+    /// New collections are automatically included as they are created.
+    #[allow(clippy::too_many_lines)]
+    #[instrument(skip(config, store, destination, stats, shutdown_rx), fields(database = %config.database))]
+    async fn database_worker(
+        config: PipelineConfig,
+        store: Arc<S>,
+        destination: Arc<Mutex<D>>,
+        stats: Arc<RwLock<PipelineStats>>,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> Result<(), PipelineError> {
+        info!("Starting database worker");
+
+        // Resume token key for database-level watching
+        let resume_token_key = config.watch_level.resume_token_key(&config.database, None);
+
+        // Get resume token from state store
+        let resume_token = store
+            .get_resume_token(&resume_token_key)
+            .await
+            .map_err(|e| PipelineError::StateStore(e.to_string()))?;
+
+        if let Some(ref token) = resume_token {
+            info!(?token, "Resuming from saved token");
+        }
+
+        // Connect to MongoDB
+        let client = mongodb::Client::with_uri_str(&config.mongodb_uri)
+            .await
+            .map_err(|e| PipelineError::MongoDB(e.to_string()))?;
+
+        let db = client.database(&config.database);
+
+        // Build change stream options
+        let mut options = mongodb::options::ChangeStreamOptions::default();
+
+        if config.stream_config.full_document_on_update {
+            options.full_document = Some(mongodb::options::FullDocumentType::UpdateLookup);
+        }
+
+        if config.stream_config.full_document_before_change {
+            options.full_document_before_change =
+                Some(mongodb::options::FullDocumentBeforeChangeType::WhenAvailable);
+        }
+
+        options.batch_size = config.stream_config.batch_size;
+
+        // Set resume token if we have one
+        if let Some(ref token_doc) = resume_token {
+            if let Ok(bytes) = bson::to_vec(token_doc) {
+                if let Ok(resume_token) =
+                    bson::from_slice::<mongodb::change_stream::event::ResumeToken>(&bytes)
+                {
+                    options.resume_after = Some(resume_token);
+                }
+            }
+        }
+
+        // Create database-level change stream
+        let mut stream = if config.stream_config.pipeline.is_empty() {
+            db.watch().with_options(options).await
+        } else {
+            db.watch()
+                .pipeline(config.stream_config.pipeline.clone())
+                .with_options(options)
+                .await
+        }
+        .map_err(|e| PipelineError::MongoDB(format!("Failed to create database watch: {}", e)))?;
+
+        info!("Database change stream created successfully");
+
+        // Event batch accumulator
+        let mut batch: Vec<ChangeEvent> = Vec::with_capacity(config.batch_size);
+        let mut last_resume_token: Option<Document> = None;
+
+        // Batch timeout interval
+        let mut batch_timer = interval(config.batch_timeout);
+        batch_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        // Label for metrics (database level uses a special name)
+        let metrics_label = format!("__db:{}", config.database);
+
+        info!(
+            batch_size = config.batch_size,
+            batch_timeout = ?config.batch_timeout,
+            "Database worker event loop started"
+        );
+
+        loop {
+            tokio::select! {
+                // Check for shutdown signal
+                _ = shutdown_rx.recv() => {
+                    info!("Received shutdown signal");
+
+                    // Flush pending batch
+                    if !batch.is_empty() {
+                        info!(batch_size = batch.len(), "Flushing pending batch on shutdown");
+                        if let Err(e) = Self::flush_batch(
+                            &metrics_label,
+                            &mut batch,
+                            last_resume_token.as_ref(),
+                            &destination,
+                            &store,
+                            &stats,
+                            &config,
+                        )
+                        .await
+                        {
+                            error!(?e, "Failed to flush batch on shutdown");
+                        }
+                    }
+
+                    info!("Database worker shutting down gracefully");
+                    break;
+                }
+
+                // Batch timeout - flush accumulated events
+                _ = batch_timer.tick() => {
+                    if !batch.is_empty() {
+                        debug!(batch_size = batch.len(), "Batch timeout - flushing");
+
+                        if let Err(e) = Self::flush_batch(
+                            &metrics_label,
+                            &mut batch,
+                            last_resume_token.as_ref(),
+                            &destination,
+                            &store,
+                            &stats,
+                            &config,
+                        )
+                        .await
+                        {
+                            error!(?e, "Failed to flush batch on timeout");
+                        }
+                    }
+                }
+
+                // Read next event from database change stream
+                event_result = stream.next() => {
+                    match event_result {
+                        Some(Ok(change_event)) => {
+                            // Extract resume token
+                            let resume_token = match bson::to_document(&change_event.id) {
+                                Ok(token) => token,
+                                Err(e) => {
+                                    error!(?e, "Failed to serialize resume token");
+                                    continue;
+                                }
+                            };
+
+                            // Convert MongoDB event to our ChangeEvent
+                            let event = match ChangeEvent::try_from(change_event) {
+                                Ok(evt) => evt,
+                                Err(e) => {
+                                    error!(?e, "Failed to convert change event");
+                                    continue;
+                                }
+                            };
+
+                            debug!(
+                                operation = ?event.operation,
+                                database = %event.namespace.database,
+                                collection = %event.namespace.collection,
+                                "Received database event"
+                            );
+
+                            // Store resume token
+                            last_resume_token = Some(resume_token.clone());
+
+                            // Save resume token to state store
+                            if let Err(e) = store.save_resume_token(&resume_token_key, &resume_token).await {
+                                warn!(?e, "Failed to save resume token");
+                            }
+
+                            // Add to batch
+                            batch.push(event);
+
+                            // Update metrics
+                            metrics::increment_batch_queue_size(&metrics_label);
+
+                            // Check if batch is full
+                            if batch.len() >= config.batch_size {
+                                debug!(batch_size = batch.len(), "Batch full - flushing");
+
+                                if let Err(e) = Self::flush_batch(
+                                    &metrics_label,
+                                    &mut batch,
+                                    last_resume_token.as_ref(),
+                                    &destination,
+                                    &store,
+                                    &stats,
+                                    &config,
+                                )
+                                .await
+                                {
+                                    error!(?e, "Failed to flush full batch");
+                                }
+                            }
+                        }
+                        Some(Err(e)) => {
+                            error!(?e, "Error reading from database change stream");
+                            // Try to reconnect after a delay
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                        None => {
+                            warn!("Database change stream ended unexpectedly");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Worker task that processes events for the entire deployment (cluster-wide).
+    ///
+    /// Uses MongoDB's `client.watch()` API to monitor all databases in the deployment.
+    /// Requires MongoDB 4.0+ and appropriate cluster-wide permissions.
+    #[allow(clippy::too_many_lines)]
+    #[instrument(skip(config, store, destination, stats, shutdown_rx))]
+    async fn deployment_worker(
+        config: PipelineConfig,
+        store: Arc<S>,
+        destination: Arc<Mutex<D>>,
+        stats: Arc<RwLock<PipelineStats>>,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> Result<(), PipelineError> {
+        info!("Starting deployment worker (cluster-wide)");
+
+        // Resume token key for deployment-level watching
+        let resume_token_key = config.watch_level.resume_token_key(&config.database, None);
+
+        // Get resume token from state store
+        let resume_token = store
+            .get_resume_token(&resume_token_key)
+            .await
+            .map_err(|e| PipelineError::StateStore(e.to_string()))?;
+
+        if let Some(ref token) = resume_token {
+            info!(?token, "Resuming from saved token");
+        }
+
+        // Connect to MongoDB
+        let client = mongodb::Client::with_uri_str(&config.mongodb_uri)
+            .await
+            .map_err(|e| PipelineError::MongoDB(e.to_string()))?;
+
+        // Build change stream options
+        let mut options = mongodb::options::ChangeStreamOptions::default();
+
+        if config.stream_config.full_document_on_update {
+            options.full_document = Some(mongodb::options::FullDocumentType::UpdateLookup);
+        }
+
+        if config.stream_config.full_document_before_change {
+            options.full_document_before_change =
+                Some(mongodb::options::FullDocumentBeforeChangeType::WhenAvailable);
+        }
+
+        options.batch_size = config.stream_config.batch_size;
+
+        // Set resume token if we have one
+        if let Some(ref token_doc) = resume_token {
+            if let Ok(bytes) = bson::to_vec(token_doc) {
+                if let Ok(resume_token) =
+                    bson::from_slice::<mongodb::change_stream::event::ResumeToken>(&bytes)
+                {
+                    options.resume_after = Some(resume_token);
+                }
+            }
+        }
+
+        // Create deployment-level (cluster-wide) change stream
+        let mut stream = if config.stream_config.pipeline.is_empty() {
+            client.watch().with_options(options).await
+        } else {
+            client
+                .watch()
+                .pipeline(config.stream_config.pipeline.clone())
+                .with_options(options)
+                .await
+        }
+        .map_err(|e| PipelineError::MongoDB(format!("Failed to create deployment watch: {}", e)))?;
+
+        info!("Deployment change stream created successfully");
+
+        // Event batch accumulator
+        let mut batch: Vec<ChangeEvent> = Vec::with_capacity(config.batch_size);
+        let mut last_resume_token: Option<Document> = None;
+
+        // Batch timeout interval
+        let mut batch_timer = interval(config.batch_timeout);
+        batch_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        // Label for metrics (deployment level uses a special name)
+        let metrics_label = "__deployment__".to_string();
+
+        info!(
+            batch_size = config.batch_size,
+            batch_timeout = ?config.batch_timeout,
+            "Deployment worker event loop started"
+        );
+
+        loop {
+            tokio::select! {
+                // Check for shutdown signal
+                _ = shutdown_rx.recv() => {
+                    info!("Received shutdown signal");
+
+                    // Flush pending batch
+                    if !batch.is_empty() {
+                        info!(batch_size = batch.len(), "Flushing pending batch on shutdown");
+                        if let Err(e) = Self::flush_batch(
+                            &metrics_label,
+                            &mut batch,
+                            last_resume_token.as_ref(),
+                            &destination,
+                            &store,
+                            &stats,
+                            &config,
+                        )
+                        .await
+                        {
+                            error!(?e, "Failed to flush batch on shutdown");
+                        }
+                    }
+
+                    info!("Deployment worker shutting down gracefully");
+                    break;
+                }
+
+                // Batch timeout - flush accumulated events
+                _ = batch_timer.tick() => {
+                    if !batch.is_empty() {
+                        debug!(batch_size = batch.len(), "Batch timeout - flushing");
+
+                        if let Err(e) = Self::flush_batch(
+                            &metrics_label,
+                            &mut batch,
+                            last_resume_token.as_ref(),
+                            &destination,
+                            &store,
+                            &stats,
+                            &config,
+                        )
+                        .await
+                        {
+                            error!(?e, "Failed to flush batch on timeout");
+                        }
+                    }
+                }
+
+                // Read next event from deployment change stream
+                event_result = stream.next() => {
+                    match event_result {
+                        Some(Ok(change_event)) => {
+                            // Extract resume token
+                            let resume_token = match bson::to_document(&change_event.id) {
+                                Ok(token) => token,
+                                Err(e) => {
+                                    error!(?e, "Failed to serialize resume token");
+                                    continue;
+                                }
+                            };
+
+                            // Convert MongoDB event to our ChangeEvent
+                            let event = match ChangeEvent::try_from(change_event) {
+                                Ok(evt) => evt,
+                                Err(e) => {
+                                    error!(?e, "Failed to convert change event");
+                                    continue;
+                                }
+                            };
+
+                            debug!(
+                                operation = ?event.operation,
+                                database = %event.namespace.database,
+                                collection = %event.namespace.collection,
+                                "Received deployment event"
+                            );
+
+                            // Store resume token
+                            last_resume_token = Some(resume_token.clone());
+
+                            // Save resume token to state store
+                            if let Err(e) = store.save_resume_token(&resume_token_key, &resume_token).await {
+                                warn!(?e, "Failed to save resume token");
+                            }
+
+                            // Add to batch
+                            batch.push(event);
+
+                            // Update metrics
+                            metrics::increment_batch_queue_size(&metrics_label);
+
+                            // Check if batch is full
+                            if batch.len() >= config.batch_size {
+                                debug!(batch_size = batch.len(), "Batch full - flushing");
+
+                                if let Err(e) = Self::flush_batch(
+                                    &metrics_label,
+                                    &mut batch,
+                                    last_resume_token.as_ref(),
+                                    &destination,
+                                    &store,
+                                    &stats,
+                                    &config,
+                                )
+                                .await
+                                {
+                                    error!(?e, "Failed to flush full batch");
+                                }
+                            }
+                        }
+                        Some(Err(e)) => {
+                            error!(?e, "Error reading from deployment change stream");
+                            // Try to reconnect after a delay
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                        None => {
+                            warn!("Deployment change stream ended unexpectedly");
                             break;
                         }
                     }
@@ -961,4 +1577,175 @@ pub enum PipelineError {
     /// Other errors
     #[error("Pipeline error: {0}")]
     Other(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_watch_collections_builds_collection_level() {
+        let config = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .watch_collections(vec!["users".to_string(), "orders".to_string()])
+            .build()
+            .unwrap();
+
+        assert!(matches!(config.watch_level, WatchLevel::Collection(_)));
+        if let WatchLevel::Collection(collections) = config.watch_level {
+            assert_eq!(collections.len(), 2);
+            assert!(collections.contains(&"users".to_string()));
+            assert!(collections.contains(&"orders".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_watch_database_builds_database_level() {
+        let config = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .watch_database()
+            .build()
+            .unwrap();
+
+        assert!(matches!(config.watch_level, WatchLevel::Database));
+    }
+
+    #[test]
+    fn test_watch_deployment_builds_deployment_level() {
+        let config = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .watch_deployment()
+            .build()
+            .unwrap();
+
+        assert!(matches!(config.watch_level, WatchLevel::Deployment));
+    }
+
+    #[test]
+    fn test_default_watch_level_is_database() {
+        let config = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .build()
+            .unwrap();
+
+        assert!(matches!(config.watch_level, WatchLevel::Database));
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_collections_method_still_works() {
+        let config = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .collections(vec!["users".to_string()])
+            .build()
+            .unwrap();
+
+        assert!(matches!(config.watch_level, WatchLevel::Collection(_)));
+        if let WatchLevel::Collection(collections) = config.watch_level {
+            assert_eq!(collections.len(), 1);
+            assert_eq!(collections[0], "users");
+        }
+    }
+
+    #[test]
+    fn test_watch_level_can_be_overridden() {
+        // Start with collections, then switch to database
+        let config = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .watch_collections(vec!["users".to_string()])
+            .watch_database() // Override to database level
+            .build()
+            .unwrap();
+
+        assert!(matches!(config.watch_level, WatchLevel::Database));
+    }
+
+    #[test]
+    fn test_config_builder_defaults() {
+        let config = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .build()
+            .unwrap();
+
+        // Default values
+        assert_eq!(config.batch_size, 100);
+        assert_eq!(config.batch_timeout, Duration::from_secs(5));
+        assert_eq!(config.max_retries, 0);
+        assert_eq!(config.retry_delay, Duration::from_millis(100));
+        assert_eq!(config.max_retry_delay, Duration::from_secs(30));
+        assert_eq!(config.channel_buffer_size, 1000);
+        assert!(matches!(config.watch_level, WatchLevel::Database));
+    }
+
+    #[test]
+    fn test_config_builder_validates_batch_size() {
+        let result = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .batch_size(20_000) // Too large
+            .build();
+
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(matches!(e, ConfigError::InvalidBatchSize { .. }));
+        }
+    }
+
+    #[test]
+    fn test_config_builder_validates_channel_buffer_size() {
+        let result = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .channel_buffer_size(5) // Too small
+            .build();
+
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(matches!(e, ConfigError::InvalidChannelBufferSize { .. }));
+        }
+    }
+
+    #[test]
+    fn test_config_builder_requires_mongodb_uri() {
+        let result = PipelineConfig::builder().database("testdb").build();
+
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(matches!(e, ConfigError::MissingMongoUri));
+        }
+    }
+
+    #[test]
+    fn test_config_builder_requires_database() {
+        let result = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .build();
+
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(matches!(e, ConfigError::MissingDatabase));
+        }
+    }
+
+    #[test]
+    fn test_retry_delay_validation() {
+        let result = PipelineConfig::builder()
+            .mongodb_uri("mongodb://localhost:27017")
+            .database("testdb")
+            .retry_delay(Duration::from_secs(60))
+            .max_retry_delay(Duration::from_secs(30)) // Less than retry_delay
+            .build();
+
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert!(matches!(e, ConfigError::RetryDelayExceedsMax { .. }));
+        }
+    }
 }

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Database-Level and Deployment-Level Change Stream Support** - New `WatchLevel` enum for flexible change stream watching
+  - `watch_collections(vec![...])` - Watch specific collections (existing behavior, renamed)
+  - `watch_database()` - Watch all collections in a database using MongoDB's `db.watch()` API
+  - `watch_deployment()` - Watch all databases cluster-wide using MongoDB's `client.watch()` API
+  - Automatic collection discovery for database-level watching
+  - New `database_watching` example demonstrating the feature
+  - Comprehensive documentation for choosing the right watch level
+
 - **Proper Columnar Parquet Serialization** - Rewrote Parquet serialization to use proper Arrow columnar format
   - CDC metadata (`operation`, `database`, `collection`, `cluster_time`) stored as typed columns
   - Document data (`full_document`, `document_key`) stored as JSON strings for schema flexibility
@@ -20,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default Watch Level** - Default is now `WatchLevel::Database` instead of requiring explicit collection list
+  - Pipelines without explicit watch level configuration will watch all collections in the database
+  - More intuitive default for most CDC use cases
+
 - **Performance Documentation** - Updated benchmark data with latest results
   - Parquet now benchmarks at 8.00ms for 1000 events (only 6% slower than JSON+ZSTD)
   - Updated all benchmark tables with fresh data
@@ -27,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **S3 Configuration Guide** - Added detailed Parquet format documentation
   - Explains hybrid columnar approach and its benefits
   - Documents query optimization capabilities
+
+### Deprecated
+
+- **`PipelineConfigBuilder::collections()` method** - Use `watch_collections()` instead
+  - The old method still works but emits a deprecation warning
+  - Will be removed in a future major release
 
 ### Fixed
 

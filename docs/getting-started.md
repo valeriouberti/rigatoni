@@ -182,17 +182,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let destination = S3Destination::new(s3_config).await?;
 
-    // Configure pipeline
+    // Configure pipeline - watch all collections in database
     let config = PipelineConfig::builder()
         .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
         .database("mydb")
-        .collections(vec!["users".to_string()])
+        .watch_database()  // Watch all collections in the database
         .batch_size(100)
         .build()?;
 
     println!("Configuration:");
     println!("  MongoDB: mongodb://localhost:27017/?replicaSet=rs0");
-    println!("  Collections: users");
+    println!("  Watch level: database (all collections)");
     println!("  S3 Bucket: my-data-lake");
     println!("  Prefix: mongodb-cdc\n");
 
@@ -217,15 +217,15 @@ You should see output like:
 Starting MongoDB to S3 pipeline...
 
 Configuration:
-  MongoDB: mongodb://localhost:27017/mydb
-  Collections: users
+  MongoDB: mongodb://localhost:27017/?replicaSet=rs0
+  Watch level: database (all collections)
   S3 Bucket: my-data-lake
   Prefix: mongodb-cdc
 
 Starting pipeline...
 
-INFO rigatoni_core::pipeline: Pipeline started
-INFO rigatoni_core::pipeline: Worker 0 started for collection: users
+INFO rigatoni_core::pipeline: Starting database-level watching
+INFO rigatoni_core::pipeline: Database change stream created successfully
 ```
 
 ### Step 5: Test the Pipeline
@@ -269,14 +269,17 @@ PipelineConfig::builder()
     // MongoDB connection
     .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
     .database("mydb")
-    .collections(vec!["users".to_string(), "orders".to_string()])
+
+    // Watch level (choose one)
+    .watch_database()          // Watch all collections (recommended)
+    // OR
+    .watch_collections(vec!["users".to_string(), "orders".to_string()])
+    // OR
+    .watch_deployment()        // Watch all databases (cluster-wide)
 
     // Batching
     .batch_size(1000)          // Max events per batch
     .batch_timeout_ms(5000)    // Max wait time for batch (ms)
-
-    // Workers
-    .num_workers(4)            // Concurrent workers per collection
 
     // Retry configuration
     .max_retries(3)            // Max retry attempts
@@ -288,6 +291,62 @@ PipelineConfig::builder()
 
     .build()?
 ```
+
+### Watch Levels
+
+Rigatoni supports three levels of change stream watching:
+
+| Watch Level | Method | Use Case |
+|-------------|--------|----------|
+| **Collection** | `.watch_collections(vec![...])` | Watch specific collections only |
+| **Database** | `.watch_database()` | Watch all collections in a database (default) |
+| **Deployment** | `.watch_deployment()` | Watch all databases cluster-wide |
+
+#### Collection Level
+
+Watch specific collections only. Use when you know exactly which collections to monitor:
+
+```rust
+PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")
+    .watch_collections(vec!["users".to_string(), "orders".to_string()])
+    .build()?
+```
+
+**Advantages**: Maximum parallelism (one worker per collection), fine-grained control.
+**Disadvantages**: Must update configuration when adding new collections.
+
+#### Database Level (Recommended)
+
+Watch all collections in a database. New collections are automatically included:
+
+```rust
+PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")
+    .watch_database()  // Default if not specified
+    .build()?
+```
+
+**Advantages**: Automatic collection discovery, simpler configuration.
+**Disadvantages**: Single stream (may become bottleneck for very high-volume databases).
+
+#### Deployment Level
+
+Watch all databases in the deployment (cluster-wide). Requires MongoDB 4.0+:
+
+```rust
+PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")  // Still needed for state storage keys
+    .watch_deployment()
+    .build()?
+```
+
+**Advantages**: Complete visibility across entire cluster.
+**Disadvantages**: High event volume, requires cluster-wide permissions.
+**Use cases**: Audit logging, compliance, multi-tenant monitoring.
 
 ### S3 Destination Configuration
 
@@ -344,12 +403,22 @@ events/collection=users/year=2025/month=01/day=15/hour=10/1705318800000.parquet.
 let config = PipelineConfig::builder()
     .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
     .database("mydb")
-    .collections(vec![
+    .watch_collections(vec![
         "users".to_string(),
         "orders".to_string(),
         "products".to_string(),
     ])
-    .num_workers(2)  // 2 workers per collection = 6 total workers
+    .build()?;
+```
+
+### Watch Entire Database
+
+```rust
+// Automatically picks up new collections as they're created
+let config = PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")
+    .watch_database()
     .build()?;
 ```
 
@@ -359,7 +428,7 @@ let config = PipelineConfig::builder()
 let config = PipelineConfig::builder()
     .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
     .database("mydb")
-    .collections(vec!["critical_data".to_string()])
+    .watch_collections(vec!["critical_data".to_string()])
     .max_retries(10)           // Retry up to 10 times
     .retry_delay_ms(500)       // Start with 500ms delay
     .max_retry_delay_ms(30000) // Cap at 30 seconds

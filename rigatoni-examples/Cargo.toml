@@ -53,3 +53,7 @@ path = "s3_with_compression.rs"
 [[example]]
 name = "s3_advanced"
 path = "s3_advanced.rs"
+
+[[example]]
+name = "database_watching"
+path = "database_watching.rs"
