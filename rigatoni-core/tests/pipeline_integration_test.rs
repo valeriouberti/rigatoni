@@ -196,7 +196,9 @@ async fn test_pipeline_config_builder() {
     let config = config.unwrap();
     assert_eq!(config.mongodb_uri, "mongodb://localhost:27017");
     assert_eq!(config.database, "test_db");
-    assert!(matches!(config.watch_level, WatchLevel::Collection(ref cols) if cols == &vec!["users".to_string()]));
+    assert!(
+        matches!(config.watch_level, WatchLevel::Collection(ref cols) if cols == &vec!["users".to_string()])
+    );
     assert_eq!(config.batch_size, 100);
     assert_eq!(config.batch_timeout, Duration::from_secs(5));
     assert_eq!(config.max_retries, 3);
@@ -215,7 +217,7 @@ async fn test_pipeline_config_builder_defaults() {
     let config = config.unwrap();
     assert_eq!(config.batch_size, 100); // Default
     assert_eq!(config.batch_timeout, Duration::from_secs(5)); // Default
-    // Default watch level is Database
+                                                              // Default watch level is Database
     assert!(matches!(config.watch_level, WatchLevel::Database));
 }
 

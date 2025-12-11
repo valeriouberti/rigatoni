@@ -831,9 +831,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         info!("Starting database worker");
 
         // Resume token key for database-level watching
-        let resume_token_key = config
-            .watch_level
-            .resume_token_key(&config.database, None);
+        let resume_token_key = config.watch_level.resume_token_key(&config.database, None);
 
         // Get resume token from state store
         let resume_token = store
@@ -1051,9 +1049,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         info!("Starting deployment worker (cluster-wide)");
 
         // Resume token key for deployment-level watching
-        let resume_token_key = config
-            .watch_level
-            .resume_token_key(&config.database, None);
+        let resume_token_key = config.watch_level.resume_token_key(&config.database, None);
 
         // Get resume token from state store
         let resume_token = store
@@ -1105,9 +1101,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                 .with_options(options)
                 .await
         }
-        .map_err(|e| {
-            PipelineError::MongoDB(format!("Failed to create deployment watch: {}", e))
-        })?;
+        .map_err(|e| PipelineError::MongoDB(format!("Failed to create deployment watch: {}", e)))?;
 
         info!("Deployment change stream created successfully");
 
