@@ -109,11 +109,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let destination = S3Destination::new(s3_config).await?;
 
-    // Configure pipeline
+    // Configure pipeline - watch entire database
     let config = PipelineConfig::builder()
         .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
         .database("mydb")
-        .collections(vec!["users", "orders"])
+        .watch_database()  // Watch all collections in the database
         .batch_size(1000)
         .build()?;
 
@@ -123,6 +123,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+```
+
+### Watch Levels
+
+Rigatoni supports three levels of change stream watching:
+
+```rust
+// Watch specific collections only
+let config = PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")
+    .watch_collections(vec!["users".to_string(), "orders".to_string()])
+    .build()?;
+
+// Watch all collections in a database (recommended)
+let config = PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")
+    .watch_database()  // Automatically picks up new collections
+    .build()?;
+
+// Watch all databases in the deployment (cluster-wide)
+let config = PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")
+    .watch_deployment()  // Requires MongoDB 4.0+ and cluster-wide permissions
+    .build()?;
 ```
 
 ### Distributed State with Redis

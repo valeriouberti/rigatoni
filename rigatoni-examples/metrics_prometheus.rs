@@ -138,7 +138,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             "mongodb://localhost:27017/?replicaSet=rs0&directConnection=true".to_string()
         }))
         .database("testdb")
-        .collections(vec![
+        .watch_collections(vec![
             "users".to_string(),
             "orders".to_string(),
             "products".to_string(),

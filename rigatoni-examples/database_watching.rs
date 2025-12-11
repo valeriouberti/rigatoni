@@ -1,7 +1,8 @@
-//! Simple Pipeline Example with In-Memory State Store
+//! Database-Level Watching Example
 //!
-//! This example demonstrates the simplest possible Rigatoni setup using
-//! an in-memory state store. Perfect for local development and testing.
+//! This example demonstrates database-level watching, where Rigatoni monitors
+//! all collections in a database automatically. New collections are included
+//! as they are created.
 //!
 //! # Prerequisites
 //!
@@ -17,16 +18,24 @@
 //! # Running the Example
 //!
 //! ```bash
-//! cargo run --example simple_pipeline_memory --features metrics-export
+//! cargo run --example database_watching --features metrics-export
 //! ```
 //!
 //! # Generate Test Data
 //!
-//! In another terminal:
+//! In another terminal, insert data into any collection:
 //! ```bash
+//! # Insert into users collection
 //! docker exec mongodb mongosh testdb --eval '
-//!   db.users.insertOne({name: "Alice", email: "alice@example.com", age: 30})
+//!   db.users.insertOne({name: "Alice", email: "alice@example.com"})
 //! '
+//!
+//! # Create a new collection and insert data
+//! docker exec mongodb mongosh testdb --eval '
+//!   db.orders.insertOne({product: "Widget", quantity: 5})
+//! '
+//!
+//! # The pipeline will automatically capture events from all collections!
 //! ```
 
 use rigatoni_core::destination::{Destination, DestinationError, DestinationMetadata};
@@ -58,9 +67,10 @@ impl Destination for ConsoleDestination {
             self.event_count += 1;
             info!(
                 count = self.event_count,
+                database = %event.namespace.database,
                 collection = %event.namespace.collection,
                 operation = ?event.operation,
-                "📦 Event received"
+                "Event received from database watch"
             );
 
             if let Some(doc) = &event.full_document {
@@ -71,15 +81,12 @@ impl Destination for ConsoleDestination {
     }
 
     async fn flush(&mut self) -> Result<(), DestinationError> {
-        info!("✅ Batch flushed ({} events total)", self.event_count);
+        info!("Batch flushed ({} events total)", self.event_count);
         Ok(())
     }
 
     async fn close(&mut self) -> Result<(), DestinationError> {
-        info!(
-            "👋 Destination closed ({} events processed)",
-            self.event_count
-        );
+        info!("Destination closed ({} events processed)", self.event_count);
         Ok(())
     }
 
@@ -97,89 +104,87 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Initialize logging
     init_logging();
 
-    info!("🚀 Starting Rigatoni with In-Memory State Store");
+    info!("Starting Rigatoni with Database-Level Watching");
     info!("");
 
-    // Create in-memory state store (no configuration needed!)
+    // Create in-memory state store
     let store = MemoryStore::new();
-    info!("✅ In-memory state store created (no external dependencies)");
+    info!("In-memory state store created");
 
-    // Create simple console destination
+    // Create console destination
     let destination = ConsoleDestination::new();
-    info!("✅ Console destination created");
+    info!("Console destination created");
 
-    // Configure pipeline
-    info!("🔧 Configuring pipeline...");
+    // Configure pipeline with database-level watching
+    info!("Configuring pipeline...");
     let config = PipelineConfig::builder()
         .mongodb_uri(std::env::var("MONGODB_URI").unwrap_or_else(|_| {
             "mongodb://localhost:27017/?replicaSet=rs0&directConnection=true".to_string()
         }))
         .database("testdb")
-        .watch_collections(vec!["users".to_string()]) // Watch specific collections
+        .watch_database() // Watch all collections in the database!
         .batch_size(10)
         .batch_timeout(Duration::from_secs(5))
         .build()?;
 
-    info!("✅ Pipeline configured");
+    info!("Pipeline configured");
     info!("");
-    info!("📊 Configuration:");
+    info!("Configuration:");
     info!("   MongoDB: {}", config.mongodb_uri);
     info!("   Database: {}", config.database);
-    info!("   Watch level: {}", config.watch_level);
+    info!("   Watch level: {} (all collections)", config.watch_level);
     info!("   Batch size: {}", config.batch_size);
     info!("   Batch timeout: {:?}", config.batch_timeout);
-    info!("   State store: In-memory (ephemeral)");
     info!("");
 
     // Create pipeline
-    info!("🎯 Creating pipeline...");
+    info!("Creating pipeline...");
     let mut pipeline = Pipeline::new(config, store, destination).await?;
-    info!("✅ Pipeline created successfully");
+    info!("Pipeline created successfully");
     info!("");
 
     // Display usage information
     display_usage();
 
     // Start the pipeline
-    info!("▶️  Starting pipeline...");
+    info!("Starting pipeline...");
     pipeline.start().await?;
-    info!("✅ Pipeline running!");
+    info!("Pipeline running!");
     info!("");
 
     // Wait for Ctrl+C
     signal::ctrl_c().await?;
 
     info!("");
-    info!("🛑 Received shutdown signal, stopping pipeline...");
+    info!("Received shutdown signal, stopping pipeline...");
     pipeline.stop().await?;
-    info!("✅ Pipeline stopped gracefully");
+    info!("Pipeline stopped gracefully");
 
-    info!("👋 Example completed!");
+    info!("Example completed!");
 
     Ok(())
 }
 
 fn display_usage() {
-    info!("💡 Usage:");
+    info!("Usage:");
     info!("");
-    info!("   1. The pipeline is now watching for MongoDB change events");
-    info!("   2. Open another terminal and insert data:");
+    info!("   1. The pipeline is now watching ALL collections in 'testdb'");
+    info!("   2. Open another terminal and insert data into ANY collection:");
     info!("");
+    info!("      # Insert into users collection");
     info!("      docker exec mongodb mongosh testdb --eval '");
-    info!("        db.users.insertOne({{");
-    info!("          name: \"Alice\",");
-    info!("          email: \"alice@example.com\",");
-    info!("          age: 30");
-    info!("        }})");
+    info!("        db.users.insertOne({{name: \"Alice\"}})");
+    info!("      '");
+    info!("");
+    info!("      # Create a NEW collection and insert (automatically detected!)");
+    info!("      docker exec mongodb mongosh testdb --eval '");
+    info!("        db.orders.insertOne({{product: \"Widget\"}})");
     info!("      '");
     info!("");
     info!("   3. Watch the events appear in this terminal!");
     info!("   4. Press Ctrl+C to stop gracefully");
     info!("");
-    warn!("⚠️  Note: Using in-memory state store");
-    warn!("   - Resume tokens are NOT persisted");
-    warn!("   - Events will be replayed from the beginning on restart");
-    warn!("   - Use RedisStore for production deployments");
+    warn!("Note: Using in-memory state store - resume tokens NOT persisted");
     info!("");
     info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     info!("");

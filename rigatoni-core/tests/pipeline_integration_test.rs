@@ -181,10 +181,12 @@ fn create_test_event(collection: &str, id: i32) -> ChangeEvent {
 
 #[tokio::test]
 async fn test_pipeline_config_builder() {
+    use rigatoni_core::watch_level::WatchLevel;
+
     let config = PipelineConfig::builder()
         .mongodb_uri("mongodb://localhost:27017")
         .database("test_db")
-        .collections(vec!["users".to_string()])
+        .watch_collections(vec!["users".to_string()])
         .batch_size(100)
         .batch_timeout(Duration::from_secs(5))
         .max_retries(3)
@@ -194,7 +196,7 @@ async fn test_pipeline_config_builder() {
     let config = config.unwrap();
     assert_eq!(config.mongodb_uri, "mongodb://localhost:27017");
     assert_eq!(config.database, "test_db");
-    assert_eq!(config.collections, vec!["users"]);
+    assert!(matches!(config.watch_level, WatchLevel::Collection(ref cols) if cols == &vec!["users".to_string()]));
     assert_eq!(config.batch_size, 100);
     assert_eq!(config.batch_timeout, Duration::from_secs(5));
     assert_eq!(config.max_retries, 3);
@@ -202,6 +204,8 @@ async fn test_pipeline_config_builder() {
 
 #[tokio::test]
 async fn test_pipeline_config_builder_defaults() {
+    use rigatoni_core::watch_level::WatchLevel;
+
     let config = PipelineConfig::builder()
         .mongodb_uri("mongodb://localhost:27017")
         .database("test_db")
@@ -211,7 +215,8 @@ async fn test_pipeline_config_builder_defaults() {
     let config = config.unwrap();
     assert_eq!(config.batch_size, 100); // Default
     assert_eq!(config.batch_timeout, Duration::from_secs(5)); // Default
-    assert!(config.collections.is_empty());
+    // Default watch level is Database
+    assert!(matches!(config.watch_level, WatchLevel::Database));
 }
 
 #[tokio::test]
@@ -273,7 +278,7 @@ async fn test_pipeline_start_stop() {
     let config = PipelineConfig::builder()
         .mongodb_uri("mongodb://localhost:27017")
         .database("test_db")
-        .collections(vec!["test_collection".to_string()])
+        .watch_collections(vec!["test_collection".to_string()])
         .batch_size(10)
         .batch_timeout(Duration::from_secs(1))
         .build()

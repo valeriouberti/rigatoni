@@ -49,3 +49,4 @@ pub mod metrics;
 pub mod pipeline;
 pub mod state;
 pub mod stream;
+pub mod watch_level;
