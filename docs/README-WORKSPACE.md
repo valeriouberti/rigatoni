@@ -30,7 +30,7 @@ Rigatoni is organized as a Cargo workspace with three member crates, each servin
 
 **Features**:
 - `default = ["s3", "json", "csv"]`: Common destinations
-- `s3`: AWS S3 destination (available in 0.1.1)
+- `s3`: AWS S3 destination
 - `json`, `csv`, `parquet`, `avro`: Serialization formats
 - `all-formats`: Enable all serialization formats
 - `compression`: gzip and zstd compression support
@@ -79,7 +79,7 @@ Workspace-level package metadata (`version`, `authors`, `license`, etc.) is inhe
 
 ```toml
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["..."]
 # ... etc
@@ -182,7 +182,7 @@ Not used extensively, but `"~1.40"` means:
 4. **Production Efficiency**: Deploy only required destinations
    ```toml
    [dependencies]
-   rigatoni-destinations = { version = "0.1.1", features = ["s3", "json"] }
+   rigatoni-destinations = { version = "0.2.0", features = ["s3", "json"] }
    ```
 
 ### Feature Flag Patterns

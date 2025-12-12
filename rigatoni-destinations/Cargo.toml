@@ -17,8 +17,7 @@ categories.workspace = true
 
 [dependencies]
 # Core crate dependency
-# Use compatible version range to allow publishing before rigatoni-core 0.1.1 is on crates.io
-rigatoni-core = { version = "0.1", path = "../rigatoni-core" }
+rigatoni-core = { version = "0.2", path = "../rigatoni-core" }
 
 # Async runtime
 tokio = { workspace = true }

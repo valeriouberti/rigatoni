@@ -53,7 +53,7 @@ Rigatoni uses three types of metrics:
 All metrics include relevant labels for filtering and aggregation:
 
 - `collection`: MongoDB collection name
-- `destination_type`: Destination type (currently only s3 in 0.1.1)
+- `destination_type`: Destination type (s3)
 - `operation`: Operation type (insert, update, delete)
 - `error_type`: Error category (timeout_error, connection_error, etc.)
 

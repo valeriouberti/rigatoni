@@ -24,7 +24,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rigatoni-core = "0.1.1"
+rigatoni-core = "0.2.0"
 ```
 
 ## Quick Start

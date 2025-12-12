@@ -62,9 +62,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rigatoni-core = "0.1.1"
-rigatoni-destinations = { version = "0.1.1", features = ["s3", "json"] }
-rigatoni-stores = { version = "0.1.1", features = ["memory"] }
+rigatoni-core = "0.2.0"
+rigatoni-destinations = { version = "0.2.0", features = ["s3", "json"] }
+rigatoni-stores = { version = "0.2.0", features = ["memory"] }
 
 # Additional dependencies for the example
 tokio = { version = "1.40", features = ["full"] }
@@ -94,7 +94,7 @@ Rigatoni uses feature flags to reduce compile time and binary size:
 **Example** - S3 with Parquet and Zstd:
 
 ```toml
-rigatoni-destinations = { version = "0.1.1", features = ["s3", "parquet", "zstandard"] }
+rigatoni-destinations = { version = "0.2.0", features = ["s3", "parquet", "zstandard"] }
 ```
 
 ---
@@ -563,7 +563,7 @@ Update `Cargo.toml`:
 
 ```toml
 [dependencies]
-rigatoni-core = { version = "0.1.1", features = ["metrics-export"] }
+rigatoni-core = { version = "0.2.0", features = ["metrics-export"] }
 metrics-exporter-prometheus = "0.15"
 ```
 
