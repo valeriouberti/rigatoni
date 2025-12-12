@@ -176,7 +176,7 @@ pub trait StateStore: Send + Sync {
 
 - **In-Memory** - Fast, no persistence (testing/development)
 - **File-based** - JSON files on disk
-- **Redis** - Distributed state for multi-instance deployments
+- **Redis** - Distributed state for multi-instance deployments with distributed locking
 
 ---
 
@@ -403,27 +403,47 @@ Example (4 workers, 1000 batch size):
 
 ### Scaling Characteristics
 
-**Horizontal Scaling:**
+**Horizontal Scaling with Distributed Locking:**
 
-Run multiple pipeline instances with:
-- Different collections per instance
-- Shared state store (Redis) for coordination
+Run multiple pipeline instances watching the same collections with Redis-based distributed locking:
 
-⚠️ **Important Limitation:** Multiple instances **MUST watch different collections**. The current Redis state store implementation does not include distributed locking, so multiple instances watching the same collection will cause:
-- Duplicate event processing (all instances receive all events)
-- Resume token race conditions (last write wins)
-- Potential data loss on restart
-
-**Safe horizontal scaling pattern:**
 ```rust
-// Instance 1
-.collections(vec!["users".to_string(), "orders".to_string()])
+use rigatoni_core::pipeline::{Pipeline, PipelineConfig, DistributedLockConfig};
+use rigatoni_stores::redis::{RedisStore, RedisConfig};
 
-// Instance 2
-.collections(vec!["products".to_string(), "inventory".to_string()])
+let config = PipelineConfig::builder()
+    .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+    .database("mydb")
+    .watch_collections(vec!["users".to_string(), "orders".to_string()])
+    .distributed_lock(DistributedLockConfig {
+        enabled: true,
+        ttl: Duration::from_secs(30),           // Lock expires if holder crashes
+        refresh_interval: Duration::from_secs(10), // Heartbeat interval
+        retry_interval: Duration::from_secs(5),    // Retry claiming locks
+    })
+    .build()?;
 ```
 
-See [Production Deployment Guide](guides/production-deployment.md#multi-instance-deployment) for details.
+**How it works:**
+- Each collection is protected by a distributed lock (stored in Redis)
+- Only one instance processes a collection at a time
+- If an instance crashes, its locks expire after TTL (default 30s)
+- Other instances automatically take over orphaned collections
+- No duplicate event processing
+
+```
+Instance 1          Instance 2          Instance 3
+    |                   |                   |
+    v                   v                   v
+Acquires locks     Acquires locks     Acquires locks
+"users"            "orders"           "products"
+    |                   |                   |
+    v                   v                   v
+Process events     Process events     Process events
+(no duplicates!)   (no duplicates!)   (no duplicates!)
+```
+
+See [Multi-Instance Deployment Guide](guides/multi-instance-deployment) for Kubernetes examples and configuration.
 
 **Vertical Scaling:**
 

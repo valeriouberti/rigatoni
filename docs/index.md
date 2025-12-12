@@ -27,6 +27,7 @@ Rigatoni is a modern CDC (Change Data Capture) and data replication framework bu
 - **🔒 Type Safety** - Leverage Rust's type system for compile-time guarantees
 - **📊 MongoDB CDC** - Real-time change stream listening with resume token support
 - **📦 S3 Integration** - Multiple formats (JSON, CSV, Parquet, Avro) with compression
+- **🔐 Distributed Locking** - Redis-based locking for horizontal scaling without duplicates
 - **🔄 Retry Logic** - Exponential backoff with configurable limits
 - **🎯 Batching** - Automatic batching based on size and time windows
 - **🎨 Composable** - Build data replication workflows from simple, testable components
