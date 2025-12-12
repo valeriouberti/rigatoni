@@ -15,6 +15,8 @@ Core traits, pipeline orchestration, and MongoDB integration for the Rigatoni CD
 - **Destination Trait** - Generic interface for pluggable output destinations
 - **Event Model** - Type-safe change event representation
 - **State Management** - Resume token persistence for fault tolerance
+- **Distributed Locking** - Redis-based locking for horizontal scaling without duplicates
+- **Metrics** - Prometheus-compatible metrics for observability
 
 ## Installation
 
@@ -55,8 +57,10 @@ This crate includes:
 
 - MongoDB change stream source (default)
 - Pipeline orchestration with batching and retry
+- Distributed locking for multi-instance deployments
 - Event model and destination trait
 - State store trait for resume tokens
+- Prometheus-compatible metrics
 
 ## Documentation
 

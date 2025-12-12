@@ -27,6 +27,7 @@ State store implementations for persisting MongoDB change stream resume tokens, 
 ### Redis Store (Available)
 
 - **Distributed** - Share state across multiple pipeline instances
+- **Distributed Locking** - Redis-based locking for horizontal scaling without duplicates
 - **Connection pooling** - Efficient connection management with deadpool
 - **Production-ready** - For multi-instance deployments
 - **TTL support** - Optional token expiration
@@ -188,9 +189,12 @@ Use **File Store** for simple, reliable persistence
 ### Multi-Instance Production
 Use **Redis Store** for distributed state across pipeline instances with:
 - Shared resume tokens across multiple workers
+- **Distributed locking** for horizontal scaling without duplicate processing
 - Connection pooling for efficient Redis usage
 - Automatic retry logic for transient failures
 - Optional TTL to prevent unbounded growth
+
+See the [Multi-Instance Deployment Guide](https://valeriouberti.github.io/rigatoni/guides/multi-instance-deployment) for Kubernetes examples and configuration.
 
 ## Documentation
 

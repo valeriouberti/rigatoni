@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Distributed Locking for Multi-Instance Deployments (P0-3)** - Redis-based distributed locking for horizontal scaling
+  - `DistributedLockConfig` for configuring lock TTL, refresh interval, and retry interval
+  - `try_acquire_lock`, `refresh_lock`, `release_lock`, `is_locked` methods in `StateStore` trait
+  - Redis implementation using `SET NX EX` for atomic lock acquisition
+  - Lua scripts for atomic lock refresh and release operations
+  - Background lock refresh tasks to maintain ownership
+  - Automatic failover when instances crash (locks expire after TTL)
+  - Lock metrics: `rigatoni_locks_held_total`, `rigatoni_lock_acquisitions_total`, `rigatoni_lock_acquisition_failures_total`, `rigatoni_locks_lost_total`, `rigatoni_lock_refreshes_total`, `rigatoni_locks_released_total`
+  - New `multi_instance_redis` example demonstrating horizontal scaling
+  - Multi-instance deployment guide with Kubernetes and Docker Compose examples
+  - MemoryStore no-op implementation for single-instance compatibility
+
 - **Database-Level and Deployment-Level Change Stream Support** - New `WatchLevel` enum for flexible change stream watching
   - `watch_collections(vec![...])` - Watch specific collections (existing behavior, renamed)
   - `watch_database()` - Watch all collections in a database using MongoDB's `db.watch()` API
