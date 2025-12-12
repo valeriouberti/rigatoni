@@ -503,3 +503,257 @@ async fn test_redis_connection_pooling() {
         handle.await.expect("task failed");
     }
 }
+
+// ============================================================================
+// Distributed Locking Tests
+// ============================================================================
+
+#[tokio::test]
+#[ignore] // Requires Docker
+async fn test_redis_lock_acquire_and_release() {
+    let redis_container = Redis::default()
+        .start()
+        .await
+        .expect("failed to start Redis container");
+
+    let host_port = redis_container
+        .get_host_port_ipv4(6379)
+        .await
+        .expect("failed to get port");
+
+    let url = format!("redis://127.0.0.1:{}", host_port);
+    let store = create_test_store(url).await;
+
+    let lock_key = "test:lock:acquire_release";
+    let owner_id = "test-owner-1";
+    let ttl = Duration::from_secs(30);
+
+    // Acquire lock should succeed
+    let acquired = store
+        .try_acquire_lock(lock_key, owner_id, ttl)
+        .await
+        .expect("Failed to acquire lock");
+    assert!(acquired, "Should acquire lock successfully");
+
+    // Check lock is held
+    let is_locked = store
+        .is_locked(lock_key)
+        .await
+        .expect("Failed to check lock");
+    assert!(is_locked, "Lock should be held");
+
+    // Release lock
+    let released = store
+        .release_lock(lock_key, owner_id)
+        .await
+        .expect("Failed to release lock");
+    assert!(released, "Should release lock successfully");
+
+    // Check lock is no longer held
+    let is_locked = store
+        .is_locked(lock_key)
+        .await
+        .expect("Failed to check lock after release");
+    assert!(!is_locked, "Lock should not be held after release");
+}
+
+#[tokio::test]
+#[ignore] // Requires Docker
+async fn test_redis_lock_mutual_exclusion() {
+    let redis_container = Redis::default()
+        .start()
+        .await
+        .expect("failed to start Redis container");
+
+    let host_port = redis_container
+        .get_host_port_ipv4(6379)
+        .await
+        .expect("failed to get port");
+
+    let url = format!("redis://127.0.0.1:{}", host_port);
+    let store = create_test_store(url).await;
+
+    let lock_key = "test:lock:mutual_exclusion";
+    let owner1 = "owner-1";
+    let owner2 = "owner-2";
+    let ttl = Duration::from_secs(30);
+
+    // Owner 1 acquires lock
+    let acquired = store
+        .try_acquire_lock(lock_key, owner1, ttl)
+        .await
+        .expect("Failed to acquire lock for owner 1");
+    assert!(acquired, "Owner 1 should acquire lock");
+
+    // Owner 2 tries to acquire same lock - should fail
+    let acquired = store
+        .try_acquire_lock(lock_key, owner2, ttl)
+        .await
+        .expect("Failed to try acquire lock for owner 2");
+    assert!(!acquired, "Owner 2 should NOT acquire lock (already held)");
+
+    // Clean up - release lock
+    store
+        .release_lock(lock_key, owner1)
+        .await
+        .expect("Failed to release lock");
+
+    // Now owner 2 should be able to acquire
+    let acquired = store
+        .try_acquire_lock(lock_key, owner2, ttl)
+        .await
+        .expect("Failed to acquire lock for owner 2 after release");
+    assert!(acquired, "Owner 2 should acquire lock after release");
+
+    // Clean up
+    store
+        .release_lock(lock_key, owner2)
+        .await
+        .expect("Failed to release lock");
+}
+
+#[tokio::test]
+#[ignore] // Requires Docker
+async fn test_redis_lock_refresh() {
+    let redis_container = Redis::default()
+        .start()
+        .await
+        .expect("failed to start Redis container");
+
+    let host_port = redis_container
+        .get_host_port_ipv4(6379)
+        .await
+        .expect("failed to get port");
+
+    let url = format!("redis://127.0.0.1:{}", host_port);
+    let store = create_test_store(url).await;
+
+    let lock_key = "test:lock:refresh";
+    let owner_id = "test-owner-refresh";
+    let ttl = Duration::from_secs(5);
+
+    // Acquire lock
+    let acquired = store
+        .try_acquire_lock(lock_key, owner_id, ttl)
+        .await
+        .expect("Failed to acquire lock");
+    assert!(acquired);
+
+    // Refresh should succeed for same owner
+    let refreshed = store
+        .refresh_lock(lock_key, owner_id, ttl)
+        .await
+        .expect("Failed to refresh lock");
+    assert!(refreshed, "Refresh should succeed for lock owner");
+
+    // Refresh should fail for different owner
+    let refreshed = store
+        .refresh_lock(lock_key, "different-owner", ttl)
+        .await
+        .expect("Failed to try refresh lock");
+    assert!(!refreshed, "Refresh should fail for non-owner");
+
+    // Clean up
+    store
+        .release_lock(lock_key, owner_id)
+        .await
+        .expect("Failed to release lock");
+}
+
+#[tokio::test]
+#[ignore] // Requires Docker
+async fn test_redis_lock_release_wrong_owner() {
+    let redis_container = Redis::default()
+        .start()
+        .await
+        .expect("failed to start Redis container");
+
+    let host_port = redis_container
+        .get_host_port_ipv4(6379)
+        .await
+        .expect("failed to get port");
+
+    let url = format!("redis://127.0.0.1:{}", host_port);
+    let store = create_test_store(url).await;
+
+    let lock_key = "test:lock:wrong_owner";
+    let owner1 = "owner-correct";
+    let owner2 = "owner-wrong";
+    let ttl = Duration::from_secs(30);
+
+    // Owner 1 acquires lock
+    let acquired = store
+        .try_acquire_lock(lock_key, owner1, ttl)
+        .await
+        .expect("Failed to acquire lock");
+    assert!(acquired);
+
+    // Owner 2 tries to release - should fail
+    let released = store
+        .release_lock(lock_key, owner2)
+        .await
+        .expect("Failed to try release lock");
+    assert!(!released, "Wrong owner should NOT be able to release lock");
+
+    // Lock should still be held
+    let is_locked = store
+        .is_locked(lock_key)
+        .await
+        .expect("Failed to check lock");
+    assert!(
+        is_locked,
+        "Lock should still be held after wrong owner release attempt"
+    );
+
+    // Correct owner can release
+    let released = store
+        .release_lock(lock_key, owner1)
+        .await
+        .expect("Failed to release lock");
+    assert!(released);
+}
+
+#[tokio::test]
+#[ignore] // Requires Docker - takes >5s
+async fn test_redis_lock_expiry() {
+    let redis_container = Redis::default()
+        .start()
+        .await
+        .expect("failed to start Redis container");
+
+    let host_port = redis_container
+        .get_host_port_ipv4(6379)
+        .await
+        .expect("failed to get port");
+
+    let url = format!("redis://127.0.0.1:{}", host_port);
+    let store = create_test_store(url).await;
+
+    let lock_key = "test:lock:expiry";
+    let owner1 = "owner-1";
+    let owner2 = "owner-2";
+    let short_ttl = Duration::from_secs(2); // Very short TTL
+
+    // Owner 1 acquires lock with short TTL
+    let acquired = store
+        .try_acquire_lock(lock_key, owner1, short_ttl)
+        .await
+        .expect("Failed to acquire lock");
+    assert!(acquired);
+
+    // Wait for lock to expire
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // Owner 2 should now be able to acquire (lock expired)
+    let acquired = store
+        .try_acquire_lock(lock_key, owner2, Duration::from_secs(30))
+        .await
+        .expect("Failed to acquire lock after expiry");
+    assert!(acquired, "Should acquire lock after TTL expiry");
+
+    // Clean up
+    store
+        .release_lock(lock_key, owner2)
+        .await
+        .expect("Failed to release lock");
+}

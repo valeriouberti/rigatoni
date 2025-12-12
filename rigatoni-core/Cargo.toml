@@ -56,6 +56,9 @@ schemars = { workspace = true }
 # Random for jitter
 rand = { workspace = true }
 
+# Hostname for distributed locking
+hostname = { workspace = true }
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]

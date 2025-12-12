@@ -40,8 +40,9 @@ Task-specific guides for common Rigatoni use cases.
 - **[LocalStack Development](localstack)** - Local development with LocalStack
 - **[Testing Strategies](testing)** - Testing your pipelines
 
-### Advanced Topics
+### Scaling and Operations
 
+- **[Multi-Instance Deployment](multi-instance-deployment)** - Horizontal scaling with distributed locking
 - **[Production Deployment](production-deployment)** - Best practices for production
 
 ---

@@ -65,11 +65,42 @@
 //!     async fn close(&self) -> Result<(), rigatoni_core::state::StateStoreError> {
 //!         Ok(())
 //!     }
+//!
+//!     async fn try_acquire_lock(
+//!         &self,
+//!         _key: &str,
+//!         _owner_id: &str,
+//!         _ttl: std::time::Duration,
+//!     ) -> Result<bool, rigatoni_core::state::StateStoreError> {
+//!         Ok(true) // Single instance, always succeed
+//!     }
+//!
+//!     async fn refresh_lock(
+//!         &self,
+//!         _key: &str,
+//!         _owner_id: &str,
+//!         _ttl: std::time::Duration,
+//!     ) -> Result<bool, rigatoni_core::state::StateStoreError> {
+//!         Ok(true)
+//!     }
+//!
+//!     async fn release_lock(
+//!         &self,
+//!         _key: &str,
+//!         _owner_id: &str,
+//!     ) -> Result<bool, rigatoni_core::state::StateStoreError> {
+//!         Ok(true)
+//!     }
+//!
+//!     async fn is_locked(&self, _key: &str) -> Result<bool, rigatoni_core::state::StateStoreError> {
+//!         Ok(false)
+//!     }
 //! }
 //! ```
 
 use mongodb::bson::Document;
 use std::collections::HashMap;
+use std::time::Duration;
 
 /// Trait for state storage backends.
 ///
@@ -119,6 +150,141 @@ pub trait StateStore {
     ///
     /// Returns an error if the store cannot be closed cleanly.
     async fn close(&self) -> Result<(), StateStoreError>;
+
+    // ==========================================================================
+    // Distributed Locking Methods
+    // ==========================================================================
+
+    /// Try to acquire a distributed lock with TTL.
+    ///
+    /// This method attempts to acquire an exclusive lock for the given key.
+    /// The lock is held by the specified owner and will automatically expire
+    /// after the TTL duration if not refreshed or released.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Lock identifier (e.g., "rigatoni:lock:mydb:users")
+    /// * `owner_id` - Unique identifier for this instance (e.g., UUID, hostname)
+    /// * `ttl` - Time-to-live for the lock (auto-expires if owner crashes)
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(true)` - Lock acquired successfully
+    /// * `Ok(false)` - Lock already held by another instance
+    /// * `Err(_)` - Error communicating with state store
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    ///
+    /// let acquired = store.try_acquire_lock(
+    ///     "rigatoni:lock:mydb:users",
+    ///     "instance-abc123",
+    ///     Duration::from_secs(30),
+    /// ).await?;
+    ///
+    /// if acquired {
+    ///     println!("Lock acquired, safe to process");
+    /// } else {
+    ///     println!("Lock held by another instance");
+    /// }
+    /// ```
+    async fn try_acquire_lock(
+        &self,
+        key: &str,
+        owner_id: &str,
+        ttl: Duration,
+    ) -> Result<bool, StateStoreError>;
+
+    /// Refresh an existing lock to extend its TTL.
+    ///
+    /// This method should be called periodically (heartbeat) to prevent
+    /// the lock from expiring during normal operation. The refresh only
+    /// succeeds if the lock is still held by the specified owner.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Lock identifier
+    /// * `owner_id` - Unique identifier for this instance
+    /// * `ttl` - New time-to-live for the lock
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(true)` - Lock refreshed successfully
+    /// * `Ok(false)` - Lock not held by this owner (was acquired by someone else or expired)
+    /// * `Err(_)` - Error communicating with state store
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Refresh lock every 10 seconds with 30 second TTL
+    /// let refreshed = store.refresh_lock(
+    ///     "rigatoni:lock:mydb:users",
+    ///     "instance-abc123",
+    ///     Duration::from_secs(30),
+    /// ).await?;
+    ///
+    /// if !refreshed {
+    ///     // Lost the lock - another instance took over
+    ///     panic!("Lost lock for collection");
+    /// }
+    /// ```
+    async fn refresh_lock(
+        &self,
+        key: &str,
+        owner_id: &str,
+        ttl: Duration,
+    ) -> Result<bool, StateStoreError>;
+
+    /// Release a lock.
+    ///
+    /// This method releases the lock if it is held by the specified owner.
+    /// Should be called during graceful shutdown to allow other instances
+    /// to take over immediately without waiting for TTL expiry.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Lock identifier
+    /// * `owner_id` - Unique identifier for this instance
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(true)` - Lock released successfully
+    /// * `Ok(false)` - Lock not held by this owner (already released or acquired by another)
+    /// * `Err(_)` - Error communicating with state store
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Release lock on shutdown
+    /// let released = store.release_lock(
+    ///     "rigatoni:lock:mydb:users",
+    ///     "instance-abc123",
+    /// ).await?;
+    ///
+    /// if released {
+    ///     println!("Lock released, other instances can now acquire");
+    /// }
+    /// ```
+    async fn release_lock(&self, key: &str, owner_id: &str) -> Result<bool, StateStoreError>;
+
+    /// Check if a lock is held (by any instance).
+    ///
+    /// This is a read-only operation to check if a lock exists.
+    /// Note: The result may be stale by the time it's used due to
+    /// distributed system timing.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Lock identifier
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(true)` - Lock is currently held
+    /// * `Ok(false)` - Lock is not held (available)
+    /// * `Err(_)` - Error communicating with state store
+    async fn is_locked(&self, key: &str) -> Result<bool, StateStoreError>;
 }
 
 /// Errors that can occur during state store operations.

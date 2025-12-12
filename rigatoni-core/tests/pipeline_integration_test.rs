@@ -73,6 +73,34 @@ impl StateStore for MemoryStateStore {
     async fn close(&self) -> Result<(), StateStoreError> {
         Ok(())
     }
+
+    // Lock methods - no-op for in-memory testing (single instance)
+    async fn try_acquire_lock(
+        &self,
+        _key: &str,
+        _owner_id: &str,
+        _ttl: Duration,
+    ) -> Result<bool, StateStoreError> {
+        // Always succeed in single-instance test environment
+        Ok(true)
+    }
+
+    async fn refresh_lock(
+        &self,
+        _key: &str,
+        _owner_id: &str,
+        _ttl: Duration,
+    ) -> Result<bool, StateStoreError> {
+        Ok(true)
+    }
+
+    async fn release_lock(&self, _key: &str, _owner_id: &str) -> Result<bool, StateStoreError> {
+        Ok(true)
+    }
+
+    async fn is_locked(&self, _key: &str) -> Result<bool, StateStoreError> {
+        Ok(false)
+    }
 }
 
 /// Mock destination that tracks calls for testing.
