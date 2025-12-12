@@ -556,6 +556,26 @@ impl RedisStore {
     }
 }
 
+/// Lua script for atomic lock refresh.
+/// Only updates expiry if the current owner matches.
+const REFRESH_LOCK_SCRIPT: &str = r#"
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("EXPIRE", KEYS[1], ARGV[2])
+else
+    return 0
+end
+"#;
+
+/// Lua script for atomic lock release.
+/// Only deletes the key if the current owner matches.
+const RELEASE_LOCK_SCRIPT: &str = r#"
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+else
+    return 0
+end
+"#;
+
 #[async_trait]
 impl StateStore for RedisStore {
     async fn save_resume_token(
@@ -755,4 +775,267 @@ impl StateStore for RedisStore {
         debug!("Redis state store closed");
         Ok(())
     }
+
+    // ==========================================================================
+    // Distributed Locking Methods
+    // ==========================================================================
+
+    async fn try_acquire_lock(
+        &self,
+        key: &str,
+        owner_id: &str,
+        ttl: Duration,
+    ) -> Result<bool, StateStoreError> {
+        debug!(
+            "Attempting to acquire lock '{}' for owner '{}' with TTL {:?}",
+            key, owner_id, ttl
+        );
+
+        let pool = self.pool.clone();
+        let key = key.to_string();
+        let owner_id = owner_id.to_string();
+        let ttl_secs = ttl.as_secs();
+
+        // Use SET NX EX for atomic lock acquisition
+        // NX = Only set if key doesn't exist
+        // EX = Set expiry time in seconds
+        let result: Option<String> = self
+            .with_retry(|| async {
+                let mut conn = pool.get().await.map_err(|e| {
+                    RedisError::from((
+                        redis::ErrorKind::IoError,
+                        "Failed to get connection from pool",
+                        e.to_string(),
+                    ))
+                })?;
+
+                // SET key owner_id NX EX ttl_secs
+                redis::cmd("SET")
+                    .arg(&key)
+                    .arg(&owner_id)
+                    .arg("NX")
+                    .arg("EX")
+                    .arg(ttl_secs)
+                    .query_async(&mut *conn)
+                    .await
+            })
+            .await?;
+
+        // SET NX returns "OK" if successful, None if key already exists
+        let acquired = result.is_some();
+
+        if acquired {
+            debug!("Lock '{}' acquired by owner '{}'", key, owner_id);
+        } else {
+            debug!(
+                "Lock '{}' not acquired (already held by another owner)",
+                key
+            );
+        }
+
+        Ok(acquired)
+    }
+
+    async fn refresh_lock(
+        &self,
+        key: &str,
+        owner_id: &str,
+        ttl: Duration,
+    ) -> Result<bool, StateStoreError> {
+        debug!(
+            "Refreshing lock '{}' for owner '{}' with TTL {:?}",
+            key, owner_id, ttl
+        );
+
+        let pool = self.pool.clone();
+        let key = key.to_string();
+        let owner_id = owner_id.to_string();
+        let ttl_secs = ttl.as_secs();
+
+        // Use Lua script for atomic check-and-update
+        let result: i32 = self
+            .with_retry(|| async {
+                let mut conn = pool.get().await.map_err(|e| {
+                    RedisError::from((
+                        redis::ErrorKind::IoError,
+                        "Failed to get connection from pool",
+                        e.to_string(),
+                    ))
+                })?;
+
+                redis::Script::new(REFRESH_LOCK_SCRIPT)
+                    .key(&key)
+                    .arg(&owner_id)
+                    .arg(ttl_secs)
+                    .invoke_async(&mut *conn)
+                    .await
+            })
+            .await?;
+
+        let refreshed = result == 1;
+
+        if refreshed {
+            debug!("Lock '{}' refreshed for owner '{}'", key, owner_id);
+        } else {
+            warn!(
+                "Lock '{}' NOT refreshed (not owned by '{}' or expired)",
+                key, owner_id
+            );
+        }
+
+        Ok(refreshed)
+    }
+
+    async fn release_lock(&self, key: &str, owner_id: &str) -> Result<bool, StateStoreError> {
+        debug!("Releasing lock '{}' for owner '{}'", key, owner_id);
+
+        let pool = self.pool.clone();
+        let key = key.to_string();
+        let owner_id = owner_id.to_string();
+
+        // Use Lua script for atomic check-and-delete
+        let result: i32 = self
+            .with_retry(|| async {
+                let mut conn = pool.get().await.map_err(|e| {
+                    RedisError::from((
+                        redis::ErrorKind::IoError,
+                        "Failed to get connection from pool",
+                        e.to_string(),
+                    ))
+                })?;
+
+                redis::Script::new(RELEASE_LOCK_SCRIPT)
+                    .key(&key)
+                    .arg(&owner_id)
+                    .invoke_async(&mut *conn)
+                    .await
+            })
+            .await?;
+
+        let released = result == 1;
+
+        if released {
+            debug!("Lock '{}' released by owner '{}'", key, owner_id);
+        } else {
+            debug!(
+                "Lock '{}' NOT released (not owned by '{}' or already released)",
+                key, owner_id
+            );
+        }
+
+        Ok(released)
+    }
+
+    async fn is_locked(&self, key: &str) -> Result<bool, StateStoreError> {
+        debug!("Checking if lock '{}' is held", key);
+
+        let pool = self.pool.clone();
+        let key = key.to_string();
+
+        let exists: bool = self
+            .with_retry(|| async {
+                let mut conn = pool.get().await.map_err(|e| {
+                    RedisError::from((
+                        redis::ErrorKind::IoError,
+                        "Failed to get connection from pool",
+                        e.to_string(),
+                    ))
+                })?;
+
+                conn.exists(&key).await
+            })
+            .await?;
+
+        debug!("Lock '{}' is_locked: {}", key, exists);
+
+        Ok(exists)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Unit tests for configuration
+
+    #[test]
+    fn test_redis_config_builder_defaults() {
+        let config = RedisConfig::builder()
+            .url("redis://localhost:6379")
+            .build()
+            .expect("Failed to build config");
+
+        assert_eq!(config.url, "redis://localhost:6379");
+        assert_eq!(config.pool_size, 10);
+        assert!(config.ttl.is_none());
+        assert!(!config.cluster_mode);
+        assert_eq!(config.connection_timeout, Duration::from_secs(5));
+        assert_eq!(config.max_retries, MAX_RETRIES);
+    }
+
+    #[test]
+    fn test_redis_config_builder_custom_values() {
+        let config = RedisConfig::builder()
+            .url("redis://custom:6380")
+            .pool_size(20)
+            .ttl(Duration::from_secs(3600))
+            .connection_timeout(Duration::from_secs(10))
+            .max_retries(5)
+            .build()
+            .expect("Failed to build config");
+
+        assert_eq!(config.url, "redis://custom:6380");
+        assert_eq!(config.pool_size, 20);
+        assert_eq!(config.ttl, Some(Duration::from_secs(3600)));
+        assert_eq!(config.connection_timeout, Duration::from_secs(10));
+        assert_eq!(config.max_retries, 5);
+    }
+
+    #[test]
+    fn test_redis_config_builder_missing_url() {
+        let result = RedisConfig::builder().pool_size(10).build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_redis_config_builder_zero_pool_size() {
+        let result = RedisConfig::builder()
+            .url("redis://localhost:6379")
+            .pool_size(0)
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_redis_config_mask_credentials() {
+        // Test with password
+        let masked = RedisConfig::mask_credentials("redis://:mypassword@localhost:6379");
+        assert!(!masked.contains("mypassword"));
+        assert!(masked.contains("***"));
+
+        // Test with username and password
+        let masked = RedisConfig::mask_credentials("redis://user:pass@localhost:6379");
+        assert!(!masked.contains("user"));
+        assert!(!masked.contains("pass"));
+        assert!(masked.contains("***"));
+
+        // Test without credentials
+        let masked = RedisConfig::mask_credentials("redis://localhost:6379");
+        assert!(!masked.contains("***@"));
+    }
+
+    #[test]
+    fn test_make_key() {
+        let key = RedisStore::make_key("users");
+        assert_eq!(key, "rigatoni:resume_token:users");
+
+        let key = RedisStore::make_key("my_database.orders");
+        assert_eq!(key, "rigatoni:resume_token:my_database.orders");
+    }
+
+    // Integration tests (including locking tests) are in tests/redis_test.rs
+    // They use testcontainers for Docker-based Redis instances.
+    // Run with: cargo test --features redis-store -- --ignored
 }

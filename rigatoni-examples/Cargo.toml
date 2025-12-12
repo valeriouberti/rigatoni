@@ -57,3 +57,7 @@ path = "s3_advanced.rs"
 [[example]]
 name = "database_watching"
 path = "database_watching.rs"
+
+[[example]]
+name = "multi_instance_redis"
+path = "multi_instance_redis.rs"

@@ -45,6 +45,7 @@ See our [detailed benchmarks](https://valeriouberti.github.io/rigatoni/performan
 - 📊 **MongoDB CDC**: Real-time change stream listening with resume token support
 - 📦 **S3 Integration**: Multiple formats (JSON, CSV, Parquet, Avro) with compression (gzip, zstd)
 - 🗄️ **Distributed State**: Redis-backed state store for multi-instance deployments
+- 🔐 **Distributed Locking**: Redis-based locking for horizontal scaling without duplicates
 - 🔄 **Retry Logic**: Exponential backoff with configurable limits
 - 🎯 **Batching**: Automatic batching based on size and time windows
 - 🎨 **Composable Pipelines**: Build data replication workflows from simple, testable components
@@ -196,19 +197,66 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-⚠️ **Scaling Limitation:** When running multiple instances with Redis, **each instance MUST watch different collections**. Multiple instances watching the same collection will cause duplicate processing due to lack of distributed locking. See [Production Deployment Guide](https://valeriouberti.github.io/rigatoni/guides/production-deployment#multi-instance-deployment) for details.
+### Horizontal Scaling with Distributed Locking
+
+Rigatoni supports horizontal scaling with distributed locking to prevent duplicate event processing:
 
 ```rust
-// ✅ Safe: Different collections per instance
-// Instance 1
-.collections(vec!["users", "orders"])
+use rigatoni_core::pipeline::{Pipeline, PipelineConfig, DistributedLockConfig};
+use rigatoni_stores::redis::{RedisStore, RedisConfig};
+use std::time::Duration;
 
-// Instance 2
-.collections(vec!["products", "inventory"])
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Configure Redis store (required for distributed locking)
+    let redis_config = RedisConfig::builder()
+        .url("redis://localhost:6379")
+        .pool_size(10)
+        .build()?;
 
-// ❌ Unsafe: Same collection causes duplicates
-// Instance 1 and 2 both watching "users"
+    let store = RedisStore::new(redis_config).await?;
+
+    // Configure pipeline with distributed locking
+    let config = PipelineConfig::builder()
+        .mongodb_uri("mongodb://localhost:27017/?replicaSet=rs0")
+        .database("mydb")
+        .watch_collections(vec!["users".to_string(), "orders".to_string()])
+        .distributed_lock(DistributedLockConfig {
+            enabled: true,
+            ttl: Duration::from_secs(30),           // Lock expires if holder crashes
+            refresh_interval: Duration::from_secs(10), // Heartbeat interval
+            retry_interval: Duration::from_secs(5),    // Retry claiming locks
+        })
+        .build()?;
+
+    // Create and run pipeline
+    let mut pipeline = Pipeline::new(config, store, destination).await?;
+    pipeline.start().await?;
+
+    Ok(())
+}
 ```
+
+**How it works:**
+- Each collection is protected by a distributed lock (stored in Redis)
+- Only one instance processes a collection at a time
+- If an instance crashes, its locks expire after TTL (default 30s)
+- Other instances automatically take over orphaned collections
+- Total throughput scales linearly with number of instances
+
+```
+Instance 1          Instance 2          Instance 3
+    |                   |                   |
+    v                   v                   v
+Acquires locks     Acquires locks     Acquires locks
+"users"            "orders"           "products"
+    |                   |                   |
+    v                   v                   v
+Process events     Process events     Process events
+(no duplicates!)   (no duplicates!)   (no duplicates!)
+```
+
+See [Multi-Instance Deployment Guide](docs/guides/multi-instance-deployment.md) for Kubernetes examples, configuration tuning, and failure handling.
 
 See [Getting Started](https://valeriouberti.github.io/rigatoni/getting-started) for detailed tutorials and [Redis Configuration Guide](https://valeriouberti.github.io/rigatoni/guides/redis-configuration) for production deployment.
 

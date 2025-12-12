@@ -191,6 +191,42 @@ const DESTINATION_WRITE_BYTES: &str = "rigatoni_destination_write_bytes";
 const CHANGE_STREAM_LAG_SECONDS: &str = "rigatoni_change_stream_lag_seconds";
 
 // ============================================================================
+// Distributed Locking Metrics
+// ============================================================================
+
+/// Total number of locks currently held by this instance.
+///
+/// Type: Gauge
+/// Unit: count
+const LOCKS_HELD_TOTAL: &str = "rigatoni_locks_held_total";
+
+/// Total number of successful lock acquisitions.
+///
+/// Type: Counter
+const LOCK_ACQUISITIONS_TOTAL: &str = "rigatoni_lock_acquisitions_total";
+
+/// Total number of failed lock acquisition attempts.
+///
+/// Type: Counter
+/// Labels: reason (already_held, error)
+const LOCK_ACQUISITION_FAILURES_TOTAL: &str = "rigatoni_lock_acquisition_failures_total";
+
+/// Total number of locks lost (expired or stolen).
+///
+/// Type: Counter
+const LOCKS_LOST_TOTAL: &str = "rigatoni_locks_lost_total";
+
+/// Total number of successful lock refreshes.
+///
+/// Type: Counter
+const LOCK_REFRESHES_TOTAL: &str = "rigatoni_lock_refreshes_total";
+
+/// Total number of locks released gracefully.
+///
+/// Type: Counter
+const LOCKS_RELEASED_TOTAL: &str = "rigatoni_locks_released_total";
+
+// ============================================================================
 // Initialization
 // ============================================================================
 
@@ -281,6 +317,38 @@ pub fn init_metrics() {
         BATCH_QUEUE_SIZE,
         metrics::Unit::Count,
         "Number of events currently buffered awaiting batch write"
+    );
+
+    // Distributed Locking Metrics
+    describe_gauge!(
+        LOCKS_HELD_TOTAL,
+        metrics::Unit::Count,
+        "Number of distributed locks currently held by this instance"
+    );
+
+    describe_counter!(
+        LOCK_ACQUISITIONS_TOTAL,
+        "Total number of successful distributed lock acquisitions"
+    );
+
+    describe_counter!(
+        LOCK_ACQUISITION_FAILURES_TOTAL,
+        "Total number of failed distributed lock acquisition attempts"
+    );
+
+    describe_counter!(
+        LOCKS_LOST_TOTAL,
+        "Total number of distributed locks lost (expired or stolen by another instance)"
+    );
+
+    describe_counter!(
+        LOCK_REFRESHES_TOTAL,
+        "Total number of successful distributed lock refreshes"
+    );
+
+    describe_counter!(
+        LOCKS_RELEASED_TOTAL,
+        "Total number of distributed locks released gracefully"
     );
 }
 
@@ -605,6 +673,116 @@ pub fn increment_batch_queue_size(collection: &str) {
 /// * `collection` - MongoDB collection name
 pub fn decrement_batch_queue_size(count: usize, collection: &str) {
     gauge!(BATCH_QUEUE_SIZE, "collection" => collection.to_string()).decrement(count as f64);
+}
+
+// ============================================================================
+// Distributed Locking Metrics
+// ============================================================================
+
+/// Sets the number of locks currently held by this instance.
+///
+/// # Arguments
+///
+/// * `count` - Number of locks held
+///
+/// # Examples
+///
+/// ```rust
+/// use rigatoni_core::metrics;
+///
+/// metrics::set_locks_held(3);
+/// ```
+pub fn set_locks_held(count: usize) {
+    gauge!(LOCKS_HELD_TOTAL).set(count as f64);
+}
+
+/// Increments the count of successful lock acquisitions.
+///
+/// # Examples
+///
+/// ```rust
+/// use rigatoni_core::metrics;
+///
+/// metrics::increment_lock_acquisitions();
+/// ```
+pub fn increment_lock_acquisitions() {
+    counter!(LOCK_ACQUISITIONS_TOTAL).increment(1);
+}
+
+/// Increments the count of failed lock acquisition attempts.
+///
+/// # Arguments
+///
+/// * `reason` - Why the lock acquisition failed
+///
+/// # Examples
+///
+/// ```rust
+/// use rigatoni_core::metrics::{self, LockFailureReason};
+///
+/// metrics::increment_lock_acquisition_failures(LockFailureReason::AlreadyHeld);
+/// ```
+pub fn increment_lock_acquisition_failures(reason: LockFailureReason) {
+    counter!(LOCK_ACQUISITION_FAILURES_TOTAL, "reason" => reason.as_str()).increment(1);
+}
+
+/// Increments the count of locks lost (expired or stolen).
+///
+/// # Examples
+///
+/// ```rust
+/// use rigatoni_core::metrics;
+///
+/// metrics::increment_locks_lost();
+/// ```
+pub fn increment_locks_lost() {
+    counter!(LOCKS_LOST_TOTAL).increment(1);
+}
+
+/// Increments the count of successful lock refreshes.
+///
+/// # Examples
+///
+/// ```rust
+/// use rigatoni_core::metrics;
+///
+/// metrics::increment_lock_refreshes();
+/// ```
+pub fn increment_lock_refreshes() {
+    counter!(LOCK_REFRESHES_TOTAL).increment(1);
+}
+
+/// Increments the count of locks released gracefully.
+///
+/// # Examples
+///
+/// ```rust
+/// use rigatoni_core::metrics;
+///
+/// metrics::increment_locks_released();
+/// ```
+pub fn increment_locks_released() {
+    counter!(LOCKS_RELEASED_TOTAL).increment(1);
+}
+
+/// Reasons for lock acquisition failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockFailureReason {
+    /// Lock is already held by another instance.
+    AlreadyHeld,
+    /// Error communicating with state store.
+    Error,
+}
+
+impl LockFailureReason {
+    /// Returns the reason as a static string for metrics labels.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::AlreadyHeld => "already_held",
+            Self::Error => "error",
+        }
+    }
 }
 
 // ============================================================================

@@ -92,6 +92,7 @@ use bson::Document;
 use rigatoni_core::state::{StateStore, StateStoreError};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, trace, warn};
 
@@ -343,6 +344,47 @@ impl StateStore for MemoryStore {
         debug!("Closing in-memory state store (no-op)");
         // No resources to clean up for in-memory store
         Ok(())
+    }
+
+    // ==========================================================================
+    // Distributed Locking Methods (No-Op Implementation)
+    // ==========================================================================
+    //
+    // For single-instance deployments using MemoryStore, locking is not needed.
+    // These methods always succeed to maintain API compatibility.
+
+    async fn try_acquire_lock(
+        &self,
+        _key: &str,
+        _owner_id: &str,
+        _ttl: Duration,
+    ) -> Result<bool, StateStoreError> {
+        // Single-instance store, no coordination needed - always succeed
+        trace!("MemoryStore: try_acquire_lock (no-op, always succeeds)");
+        Ok(true)
+    }
+
+    async fn refresh_lock(
+        &self,
+        _key: &str,
+        _owner_id: &str,
+        _ttl: Duration,
+    ) -> Result<bool, StateStoreError> {
+        // Single-instance store, no coordination needed - always succeed
+        trace!("MemoryStore: refresh_lock (no-op, always succeeds)");
+        Ok(true)
+    }
+
+    async fn release_lock(&self, _key: &str, _owner_id: &str) -> Result<bool, StateStoreError> {
+        // Single-instance store, no coordination needed - always succeed
+        trace!("MemoryStore: release_lock (no-op, always succeeds)");
+        Ok(true)
+    }
+
+    async fn is_locked(&self, _key: &str) -> Result<bool, StateStoreError> {
+        // Single-instance store - locks are never "held" (no contention possible)
+        trace!("MemoryStore: is_locked (no-op, always returns false)");
+        Ok(false)
     }
 }
 

@@ -66,6 +66,25 @@ Advanced S3 destination with Parquet format and Hive-style partitioning for anal
 cargo run --example s3_advanced -p rigatoni-examples
 ```
 
+### 7. Multi-Instance with Redis Distributed Locking
+
+**File**: `multi_instance_redis.rs`
+
+Demonstrates horizontal scaling with multiple Rigatoni instances using Redis-based distributed locking to prevent duplicate event processing.
+
+```bash
+# Terminal 1
+INSTANCE_NAME=instance-1 cargo run --example multi_instance_redis
+
+# Terminal 2
+INSTANCE_NAME=instance-2 cargo run --example multi_instance_redis
+
+# Terminal 3
+INSTANCE_NAME=instance-3 cargo run --example multi_instance_redis
+```
+
+Each instance automatically acquires locks for available collections. If an instance crashes, its locks expire after TTL (30s) and other instances take over.
+
 ## Prerequisites
 
 All examples require:
@@ -76,6 +95,9 @@ All examples require:
 S3 examples additionally require:
 - **AWS credentials** configured (or LocalStack for local testing)
 - **S3 bucket** (or LocalStack S3 service)
+
+Multi-instance examples additionally require:
+- **Redis** (for distributed locking)
 
 ### Start MongoDB
 
@@ -95,6 +117,12 @@ docker run -d --name localstack -p 4566:4566 localstack/localstack
 
 # Create test bucket
 awslocal s3 mb s3://rigatoni-test-bucket
+```
+
+### Start Redis (for multi-instance examples)
+
+```bash
+docker run -d --name redis -p 6379:6379 redis:7.0
 ```
 
 ## Running Examples

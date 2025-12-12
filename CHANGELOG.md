@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.2.0] - 2025-12-12
+
 ### Added
+
+- **Distributed Locking for Multi-Instance Deployments** - Redis-based distributed locking for horizontal scaling
+  - `DistributedLockConfig` for configuring lock TTL, refresh interval, and retry interval
+  - `try_acquire_lock`, `refresh_lock`, `release_lock`, `is_locked` methods in `StateStore` trait
+  - Redis implementation using `SET NX EX` for atomic lock acquisition
+  - Lua scripts for atomic lock refresh and release operations
+  - Background lock refresh tasks to maintain ownership
+  - Automatic failover when instances crash (locks expire after TTL)
+  - Lock metrics: `rigatoni_locks_held_total`, `rigatoni_lock_acquisitions_total`, `rigatoni_lock_acquisition_failures_total`, `rigatoni_locks_lost_total`, `rigatoni_lock_refreshes_total`, `rigatoni_locks_released_total`
+  - New `multi_instance_redis` example demonstrating horizontal scaling
+  - Multi-instance deployment guide with Kubernetes and Docker Compose examples
+  - MemoryStore no-op implementation for single-instance compatibility
 
 - **Database-Level and Deployment-Level Change Stream Support** - New `WatchLevel` enum for flexible change stream watching
   - `watch_collections(vec![...])` - Watch specific collections (existing behavior, renamed)
@@ -26,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Snappy compression enabled by default with dictionary encoding
   - Page-level statistics for predicate pushdown optimization
 
+- **Comprehensive Observability Documentation** - New observability guide with production-ready configurations
+  - Complete metrics reference for all counters, histograms, and gauges
+  - Prometheus integration guide with example configurations
+  - Grafana dashboard JSON for monitoring pipeline health
+  - Alerting rules for critical conditions (pipeline down, high error rate, queue growth)
+  - Performance tuning guide based on metrics analysis
+  - Troubleshooting runbook for common issues
+
 ### Changed
 
 - **Default Watch Level** - Default is now `WatchLevel::Database` instead of requiring explicit collection list
@@ -36,9 +60,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Parquet now benchmarks at 8.00ms for 1000 events (only 6% slower than JSON+ZSTD)
   - Updated all benchmark tables with fresh data
   - Added Parquet to performance metrics summary
+
 - **S3 Configuration Guide** - Added detailed Parquet format documentation
   - Explains hybrid columnar approach and its benefits
   - Documents query optimization capabilities
+
+- **Documentation Navigation** - Added Observability link to main documentation index
 
 ### Deprecated
 
@@ -156,7 +183,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/valeriouberti/rigatoni/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/valeriouberti/rigatoni/compare/v0.1.4...v0.2.0
 [0.1.4]: https://github.com/valeriouberti/rigatoni/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/valeriouberti/rigatoni/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/valeriouberti/rigatoni/compare/v0.1.1...v0.1.2

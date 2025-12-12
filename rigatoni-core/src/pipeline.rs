@@ -73,6 +73,173 @@ use tokio::task::JoinHandle;
 use tokio::time::{interval, Instant};
 use tracing::{debug, error, info, instrument, warn};
 
+/// Configuration for distributed locking in multi-instance deployments.
+///
+/// Distributed locking ensures that only one pipeline instance processes
+/// events for a given collection at any time, preventing duplicate processing.
+///
+/// # How It Works
+///
+/// - Each collection is protected by a distributed lock (stored in Redis)
+/// - Only the instance holding the lock processes events for that collection
+/// - If an instance crashes, its locks expire after TTL
+/// - Other instances automatically take over expired locks
+///
+/// # Example
+///
+/// ```rust
+/// use rigatoni_core::pipeline::DistributedLockConfig;
+/// use std::time::Duration;
+///
+/// let lock_config = DistributedLockConfig {
+///     enabled: true,
+///     ttl: Duration::from_secs(30),
+///     refresh_interval: Duration::from_secs(10),
+///     retry_interval: Duration::from_secs(5),
+/// };
+/// ```
+#[derive(Debug, Clone)]
+pub struct DistributedLockConfig {
+    /// Enable distributed locking (requires StateStore with lock support).
+    ///
+    /// When enabled (default), the pipeline will acquire locks before starting
+    /// workers. This is required for multi-instance deployments to prevent
+    /// duplicate event processing.
+    ///
+    /// Disable only for:
+    /// - Single-instance deployments
+    /// - Development/testing scenarios
+    /// - When using a StateStore without lock support
+    pub enabled: bool,
+
+    /// Lock time-to-live (expiry time).
+    ///
+    /// If an instance crashes without releasing its locks, the locks will
+    /// expire after this duration, allowing other instances to take over.
+    ///
+    /// **Tradeoff**:
+    /// - Short TTL (10s): Fast failover, but needs frequent refresh
+    /// - Long TTL (60s): Less refresh overhead, but slow failover
+    ///
+    /// **Recommended**: 30 seconds (default)
+    pub ttl: Duration,
+
+    /// How often to refresh the lock (heartbeat interval).
+    ///
+    /// The lock owner must refresh the lock periodically to prevent expiry.
+    /// This interval should be significantly less than the TTL.
+    ///
+    /// **Rule of thumb**: refresh_interval < ttl / 2
+    ///
+    /// **Recommended**: TTL / 3 (e.g., 10s for 30s TTL) (default)
+    pub refresh_interval: Duration,
+
+    /// How long to wait before retrying lock acquisition.
+    ///
+    /// If a lock is held by another instance, this instance will wait
+    /// this duration before attempting to acquire the lock again.
+    ///
+    /// **Recommended**: 5-10 seconds (default: 5s)
+    pub retry_interval: Duration,
+}
+
+impl Default for DistributedLockConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true, // Enabled by default for safety (prevents duplicates)
+            ttl: Duration::from_secs(30),
+            refresh_interval: Duration::from_secs(10),
+            retry_interval: Duration::from_secs(5),
+        }
+    }
+}
+
+impl DistributedLockConfig {
+    /// Creates a new builder for `DistributedLockConfig`.
+    #[must_use]
+    pub fn builder() -> DistributedLockConfigBuilder {
+        DistributedLockConfigBuilder::default()
+    }
+
+    /// Creates a disabled lock configuration.
+    ///
+    /// Use this for single-instance deployments where locking is not needed.
+    #[must_use]
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Default::default()
+        }
+    }
+}
+
+/// Builder for `DistributedLockConfig`.
+#[derive(Debug, Default)]
+pub struct DistributedLockConfigBuilder {
+    enabled: Option<bool>,
+    ttl: Option<Duration>,
+    refresh_interval: Option<Duration>,
+    retry_interval: Option<Duration>,
+}
+
+impl DistributedLockConfigBuilder {
+    /// Sets whether distributed locking is enabled.
+    #[must_use]
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = Some(enabled);
+        self
+    }
+
+    /// Sets the lock TTL.
+    #[must_use]
+    pub fn ttl(mut self, ttl: Duration) -> Self {
+        self.ttl = Some(ttl);
+        self
+    }
+
+    /// Sets the lock refresh interval.
+    #[must_use]
+    pub fn refresh_interval(mut self, interval: Duration) -> Self {
+        self.refresh_interval = Some(interval);
+        self
+    }
+
+    /// Sets the lock retry interval.
+    #[must_use]
+    pub fn retry_interval(mut self, interval: Duration) -> Self {
+        self.retry_interval = Some(interval);
+        self
+    }
+
+    /// Builds the `DistributedLockConfig`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - `refresh_interval` >= `ttl` (lock would expire before refresh)
+    pub fn build(self) -> Result<DistributedLockConfig, ConfigError> {
+        let ttl = self.ttl.unwrap_or(Duration::from_secs(30));
+        let refresh_interval = self.refresh_interval.unwrap_or(Duration::from_secs(10));
+
+        // Validate: refresh_interval must be less than ttl
+        if refresh_interval >= ttl {
+            return Err(ConfigError::InvalidLockConfig {
+                reason: format!(
+                    "refresh_interval ({:?}) must be less than ttl ({:?})",
+                    refresh_interval, ttl
+                ),
+            });
+        }
+
+        Ok(DistributedLockConfig {
+            enabled: self.enabled.unwrap_or(true),
+            ttl,
+            refresh_interval,
+            retry_interval: self.retry_interval.unwrap_or(Duration::from_secs(5)),
+        })
+    }
+}
+
 /// Configuration for the pipeline orchestrator.
 #[derive(Debug, Clone)]
 pub struct PipelineConfig {
@@ -110,6 +277,14 @@ pub struct PipelineConfig {
 
     /// Change stream configuration
     pub stream_config: ChangeStreamConfig,
+
+    /// Distributed locking configuration for multi-instance deployments.
+    ///
+    /// When running multiple pipeline instances watching the same collections,
+    /// distributed locking ensures only one instance processes events at a time.
+    ///
+    /// Default: Enabled with 30s TTL, 10s refresh, 5s retry
+    pub distributed_lock: DistributedLockConfig,
 }
 
 impl PipelineConfig {
@@ -133,6 +308,7 @@ pub struct PipelineConfigBuilder {
     max_retry_delay: Duration,
     channel_buffer_size: usize,
     stream_config: Option<ChangeStreamConfig>,
+    distributed_lock: Option<DistributedLockConfig>,
 }
 
 impl PipelineConfigBuilder {
@@ -322,6 +498,54 @@ impl PipelineConfigBuilder {
         self
     }
 
+    /// Sets the distributed locking configuration.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rigatoni_core::pipeline::{PipelineConfig, DistributedLockConfig};
+    /// use std::time::Duration;
+    ///
+    /// let config = PipelineConfig::builder()
+    ///     .mongodb_uri("mongodb://localhost:27017")
+    ///     .database("mydb")
+    ///     .distributed_lock(DistributedLockConfig {
+    ///         enabled: true,
+    ///         ttl: Duration::from_secs(30),
+    ///         refresh_interval: Duration::from_secs(10),
+    ///         retry_interval: Duration::from_secs(5),
+    ///     })
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    #[must_use]
+    pub fn distributed_lock(mut self, config: DistributedLockConfig) -> Self {
+        self.distributed_lock = Some(config);
+        self
+    }
+
+    /// Disables distributed locking.
+    ///
+    /// Use this for single-instance deployments where locking is not needed.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rigatoni_core::pipeline::PipelineConfig;
+    ///
+    /// let config = PipelineConfig::builder()
+    ///     .mongodb_uri("mongodb://localhost:27017")
+    ///     .database("mydb")
+    ///     .disable_distributed_lock()
+    ///     .build()
+    ///     .unwrap();
+    /// ```
+    #[must_use]
+    pub fn disable_distributed_lock(mut self) -> Self {
+        self.distributed_lock = Some(DistributedLockConfig::disabled());
+        self
+    }
+
     /// Builds the `PipelineConfig`.
     ///
     /// # Errors
@@ -392,6 +616,8 @@ impl PipelineConfigBuilder {
                 .expect("Default stream config should build")
         });
 
+        let distributed_lock = self.distributed_lock.unwrap_or_default();
+
         Ok(PipelineConfig {
             mongodb_uri,
             database,
@@ -403,6 +629,7 @@ impl PipelineConfigBuilder {
             max_retry_delay,
             channel_buffer_size,
             stream_config,
+            distributed_lock,
         })
     }
 }
@@ -426,6 +653,9 @@ pub struct PipelineStats {
 /// Type alias for worker task handles.
 type WorkerHandle = JoinHandle<Result<(), PipelineError>>;
 
+/// Type alias for lock refresh task handles.
+type LockRefreshHandle = JoinHandle<()>;
+
 /// Pipeline orchestrator that connects MongoDB change streams to destinations.
 pub struct Pipeline<S: StateStore, D: Destination> {
     /// Pipeline configuration
@@ -443,11 +673,22 @@ pub struct Pipeline<S: StateStore, D: Destination> {
     /// Worker task handles
     workers: Arc<RwLock<Vec<WorkerHandle>>>,
 
+    /// Lock refresh task handles
+    lock_refresh_handles: Arc<RwLock<Vec<LockRefreshHandle>>>,
+
     /// Pipeline statistics
     stats: Arc<RwLock<PipelineStats>>,
 
     /// Running flag
     running: Arc<RwLock<bool>>,
+
+    /// Unique identifier for this pipeline instance (used for distributed locking).
+    ///
+    /// Format: `{hostname}-{uuid}`
+    owner_id: String,
+
+    /// Collections for which we hold locks (only for Collection watch level)
+    locked_collections: Arc<RwLock<Vec<String>>>,
 }
 
 impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'static> Pipeline<S, D> {
@@ -461,11 +702,19 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         store: S,
         destination: D,
     ) -> Result<Self, PipelineError> {
+        // Generate unique owner ID for this instance (used for distributed locking)
+        let hostname = hostname::get()
+            .map(|h| h.to_string_lossy().to_string())
+            .unwrap_or_else(|_| "unknown".to_string());
+        let owner_id = format!("{}-{}", hostname, uuid::Uuid::new_v4());
+
         info!(
             database = %config.database,
             watch_level = %config.watch_level,
             batch_size = config.batch_size,
             batch_timeout = ?config.batch_timeout,
+            owner_id = %owner_id,
+            distributed_lock_enabled = config.distributed_lock.enabled,
             "Creating pipeline"
         );
 
@@ -475,9 +724,33 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             destination: Arc::new(Mutex::new(destination)),
             shutdown_tx: None,
             workers: Arc::new(RwLock::new(Vec::new())),
+            lock_refresh_handles: Arc::new(RwLock::new(Vec::new())),
             stats: Arc::new(RwLock::new(PipelineStats::default())),
             running: Arc::new(RwLock::new(false)),
+            owner_id,
+            locked_collections: Arc::new(RwLock::new(Vec::new())),
         })
+    }
+
+    /// Returns the unique owner ID for this pipeline instance.
+    #[must_use]
+    pub fn owner_id(&self) -> &str {
+        &self.owner_id
+    }
+
+    /// Generates a lock key for a given collection.
+    fn lock_key(&self, collection: &str) -> String {
+        format!("rigatoni:lock:{}:{}", self.config.database, collection)
+    }
+
+    /// Generates a lock key for database-level watching.
+    fn database_lock_key(&self) -> String {
+        format!("rigatoni:lock:{}:__database__", self.config.database)
+    }
+
+    /// Generates a lock key for deployment-level watching.
+    fn deployment_lock_key(&self) -> String {
+        "rigatoni:lock:__deployment__".to_string()
     }
 
     /// Starts the pipeline, spawning workers based on the configured watch level.
@@ -487,6 +760,11 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     /// - **Database**: Spawn a single worker watching all collections in the database
     /// - **Deployment**: Spawn a single worker watching all databases in the deployment
     ///
+    /// When distributed locking is enabled, the pipeline will:
+    /// - Acquire locks before starting workers
+    /// - Start lock refresh background tasks
+    /// - Release locks on shutdown
+    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -494,7 +772,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     /// - MongoDB connection fails
     /// - Worker spawn fails
     /// - Empty collection list is provided with [`WatchLevel::Collection`]
-    #[instrument(skip(self), fields(database = %self.config.database))]
+    #[instrument(skip(self), fields(database = %self.config.database, owner_id = %self.owner_id))]
     pub async fn start(&mut self) -> Result<(), PipelineError> {
         // Check if already running
         let mut running = self.running.write().await;
@@ -502,13 +780,19 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             return Err(PipelineError::AlreadyRunning);
         }
 
-        info!(watch_level = %self.config.watch_level, "Starting pipeline");
+        info!(
+            watch_level = %self.config.watch_level,
+            distributed_lock_enabled = self.config.distributed_lock.enabled,
+            "Starting pipeline"
+        );
 
         // Create shutdown channel (broadcast so all workers get the signal)
         let (shutdown_tx, _) = broadcast::channel(1);
         self.shutdown_tx = Some(shutdown_tx.clone());
 
         let mut workers = self.workers.write().await;
+        let mut lock_refresh_handles = self.lock_refresh_handles.write().await;
+        let mut locked_collections = self.locked_collections.write().await;
         let mut num_workers = 0;
 
         match &self.config.watch_level {
@@ -527,8 +811,48 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                     "Starting collection-level watching"
                 );
 
-                // Spawn worker for each collection
+                // Spawn worker for each collection (with optional locking)
                 for collection in collections {
+                    let lock_key = self.lock_key(collection);
+
+                    // Try to acquire lock if distributed locking is enabled
+                    if self.config.distributed_lock.enabled {
+                        let acquired = self
+                            .store
+                            .try_acquire_lock(
+                                &lock_key,
+                                &self.owner_id,
+                                self.config.distributed_lock.ttl,
+                            )
+                            .await
+                            .map_err(|e| PipelineError::StateStore(e.to_string()))?;
+
+                        if !acquired {
+                            info!(
+                                collection = %collection,
+                                "Collection is locked by another instance, skipping"
+                            );
+                            // Record metric
+                            metrics::increment_lock_acquisition_failures(
+                                metrics::LockFailureReason::AlreadyHeld,
+                            );
+                            // Skip this collection - another instance owns it
+                            continue;
+                        }
+
+                        info!(collection = %collection, "Acquired lock for collection");
+                        metrics::increment_lock_acquisitions();
+                        locked_collections.push(collection.clone());
+
+                        // Start lock refresh background task
+                        let refresh_handle = self.start_lock_refresh_task(
+                            lock_key,
+                            collection.clone(),
+                            shutdown_tx.subscribe(),
+                        );
+                        lock_refresh_handles.push(refresh_handle);
+                    }
+
                     let shutdown_rx = shutdown_tx.subscribe();
                     let worker = self
                         .spawn_collection_worker(collection.clone(), shutdown_rx)
@@ -538,13 +862,53 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
                     num_workers += 1;
                 }
 
-                metrics::set_active_collections(collections.len());
+                // Report only collections we're actually processing
+                metrics::set_active_collections(num_workers);
             }
             WatchLevel::Database => {
                 info!(
                     database = %self.config.database,
                     "Starting database-level watching"
                 );
+
+                let lock_key = self.database_lock_key();
+
+                // Try to acquire lock if distributed locking is enabled
+                if self.config.distributed_lock.enabled {
+                    let acquired = self
+                        .store
+                        .try_acquire_lock(
+                            &lock_key,
+                            &self.owner_id,
+                            self.config.distributed_lock.ttl,
+                        )
+                        .await
+                        .map_err(|e| PipelineError::StateStore(e.to_string()))?;
+
+                    if !acquired {
+                        info!("Database is locked by another instance, cannot start");
+                        metrics::increment_lock_acquisition_failures(
+                            metrics::LockFailureReason::AlreadyHeld,
+                        );
+                        return Err(PipelineError::Configuration(
+                            "Database is locked by another instance. \
+                             Wait for the lock to expire or use collection-level watching."
+                                .to_string(),
+                        ));
+                    }
+
+                    info!("Acquired lock for database");
+                    metrics::increment_lock_acquisitions();
+                    locked_collections.push("__database__".to_string());
+
+                    // Start lock refresh background task
+                    let refresh_handle = self.start_lock_refresh_task(
+                        lock_key,
+                        "__database__".to_string(),
+                        shutdown_tx.subscribe(),
+                    );
+                    lock_refresh_handles.push(refresh_handle);
+                }
 
                 let shutdown_rx = shutdown_tx.subscribe();
                 let worker = self.spawn_database_worker(shutdown_rx).await?;
@@ -557,6 +921,45 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             WatchLevel::Deployment => {
                 info!("Starting deployment-level watching (cluster-wide)");
 
+                let lock_key = self.deployment_lock_key();
+
+                // Try to acquire lock if distributed locking is enabled
+                if self.config.distributed_lock.enabled {
+                    let acquired = self
+                        .store
+                        .try_acquire_lock(
+                            &lock_key,
+                            &self.owner_id,
+                            self.config.distributed_lock.ttl,
+                        )
+                        .await
+                        .map_err(|e| PipelineError::StateStore(e.to_string()))?;
+
+                    if !acquired {
+                        info!("Deployment is locked by another instance, cannot start");
+                        metrics::increment_lock_acquisition_failures(
+                            metrics::LockFailureReason::AlreadyHeld,
+                        );
+                        return Err(PipelineError::Configuration(
+                            "Deployment is locked by another instance. \
+                             Wait for the lock to expire or use collection/database-level watching."
+                                .to_string(),
+                        ));
+                    }
+
+                    info!("Acquired lock for deployment");
+                    metrics::increment_lock_acquisitions();
+                    locked_collections.push("__deployment__".to_string());
+
+                    // Start lock refresh background task
+                    let refresh_handle = self.start_lock_refresh_task(
+                        lock_key,
+                        "__deployment__".to_string(),
+                        shutdown_tx.subscribe(),
+                    );
+                    lock_refresh_handles.push(refresh_handle);
+                }
+
                 let shutdown_rx = shutdown_tx.subscribe();
                 let worker = self.spawn_deployment_worker(shutdown_rx).await?;
                 workers.push(worker);
@@ -568,12 +971,75 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
         }
 
         *running = true;
-        info!(workers = num_workers, "Pipeline started");
+        info!(
+            workers = num_workers,
+            locks_held = locked_collections.len(),
+            "Pipeline started"
+        );
 
         // Update metrics
         metrics::set_pipeline_status(metrics::PipelineStatus::Running);
+        metrics::set_locks_held(locked_collections.len());
 
         Ok(())
+    }
+
+    /// Starts a background task to refresh a lock periodically.
+    fn start_lock_refresh_task(
+        &self,
+        lock_key: String,
+        collection_name: String,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> LockRefreshHandle {
+        let store = Arc::clone(&self.store);
+        let owner_id = self.owner_id.clone();
+        let refresh_interval = self.config.distributed_lock.refresh_interval;
+        let ttl = self.config.distributed_lock.ttl;
+
+        tokio::spawn(async move {
+            let mut interval_timer = interval(refresh_interval);
+            interval_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            loop {
+                tokio::select! {
+                    _ = shutdown_rx.recv() => {
+                        debug!(
+                            collection = %collection_name,
+                            "Lock refresh task received shutdown signal"
+                        );
+                        break;
+                    }
+                    _ = interval_timer.tick() => {
+                        match store.refresh_lock(&lock_key, &owner_id, ttl).await {
+                            Ok(true) => {
+                                debug!(
+                                    collection = %collection_name,
+                                    "Lock refreshed successfully"
+                                );
+                                metrics::increment_lock_refreshes();
+                            }
+                            Ok(false) => {
+                                error!(
+                                    collection = %collection_name,
+                                    "Lost lock (acquired by another instance or expired)"
+                                );
+                                metrics::increment_locks_lost();
+                                // TODO: Signal worker to stop gracefully
+                                break;
+                            }
+                            Err(e) => {
+                                warn!(
+                                    collection = %collection_name,
+                                    error = %e,
+                                    "Failed to refresh lock (transient error, will retry)"
+                                );
+                                // Continue trying - transient errors shouldn't kill lock
+                            }
+                        }
+                    }
+                }
+            }
+        })
     }
 
     /// Spawns a worker task for a specific collection.
@@ -1436,15 +1902,16 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
     /// Stops the pipeline gracefully.
     ///
     /// This will:
-    /// 1. Send shutdown signal to all workers
+    /// 1. Send shutdown signal to all workers and lock refresh tasks
     /// 2. Wait for workers to finish processing
     /// 3. Flush any pending batches
-    /// 4. Close destination connection
+    /// 4. Release all held locks (for distributed locking)
+    /// 5. Close destination connection
     ///
     /// # Errors
     ///
     /// Returns an error if shutdown fails or workers panic.
-    #[instrument(skip(self))]
+    #[instrument(skip(self), fields(owner_id = %self.owner_id))]
     pub async fn stop(&mut self) -> Result<(), PipelineError> {
         info!("Stopping pipeline");
 
@@ -1454,7 +1921,7 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             return Ok(());
         }
 
-        // Send shutdown signal (broadcast to all workers)
+        // Send shutdown signal (broadcast to all workers and lock refresh tasks)
         if let Some(tx) = self.shutdown_tx.take() {
             let _ = tx.send(());
         }
@@ -1475,6 +1942,46 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
             }
         }
 
+        // Wait for lock refresh tasks to finish
+        let mut lock_refresh_handles = self.lock_refresh_handles.write().await;
+        for handle in lock_refresh_handles.drain(..) {
+            if let Err(e) = handle.await {
+                warn!(?e, "Lock refresh task panicked");
+            }
+        }
+
+        // Release all held locks
+        if self.config.distributed_lock.enabled {
+            let locked_collections = self.locked_collections.read().await;
+            for collection in locked_collections.iter() {
+                let lock_key = match collection.as_str() {
+                    "__database__" => self.database_lock_key(),
+                    "__deployment__" => self.deployment_lock_key(),
+                    _ => self.lock_key(collection),
+                };
+
+                match self.store.release_lock(&lock_key, &self.owner_id).await {
+                    Ok(true) => {
+                        info!(collection = %collection, "Released lock");
+                        metrics::increment_locks_released();
+                    }
+                    Ok(false) => {
+                        warn!(
+                            collection = %collection,
+                            "Lock was not held by this instance (already released or stolen)"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            collection = %collection,
+                            error = %e,
+                            "Failed to release lock (will expire via TTL)"
+                        );
+                    }
+                }
+            }
+        }
+
         // Flush and close destination
         let mut dest = self.destination.lock().await;
         dest.flush()
@@ -1486,9 +1993,14 @@ impl<S: StateStore + Send + Sync + 'static, D: Destination + Send + Sync + 'stat
 
         *running = false;
 
+        // Clear locked collections
+        let mut locked_collections = self.locked_collections.write().await;
+        locked_collections.clear();
+
         // Update metrics
         metrics::set_pipeline_status(metrics::PipelineStatus::Stopped);
         metrics::set_active_collections(0);
+        metrics::set_locks_held(0);
 
         // Log final statistics
         let stats = self.stats.read().await;
@@ -1545,6 +2057,10 @@ pub enum ConfigError {
     /// Invalid channel buffer size
     #[error("Invalid channel_buffer_size: {value} ({reason})")]
     InvalidChannelBufferSize { value: usize, reason: &'static str },
+
+    /// Invalid distributed lock configuration
+    #[error("Invalid distributed lock config: {reason}")]
+    InvalidLockConfig { reason: String },
 }
 
 /// Pipeline errors.
@@ -1577,6 +2093,10 @@ pub enum PipelineError {
     /// Other errors
     #[error("Pipeline error: {0}")]
     Other(String),
+
+    /// Lock lost error
+    #[error("Lock lost for collection '{collection}': {reason}")]
+    LockLost { collection: String, reason: String },
 }
 
 #[cfg(test)]
